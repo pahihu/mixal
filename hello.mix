@@ -1,0 +1,17 @@
+*
+*       HELLO WORLD
+*
+MSG        EQU  200
+PRINTER    EQU  18
+*
+           ORIG 100
+HELLO      OUT  MSG(PRINTER)
+           JBUS *(PRINTER)
+           HLT
+*
+           ORIG MSG
+           ALF  "HELLO"
+           ALF  " WORL"
+           ALF  "D"
+           END  HELLO
+

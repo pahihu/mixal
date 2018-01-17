@@ -1,0 +1,19 @@
+180117AP
+        - io.c: go device, reader/punch/printer could redirected to files
+                only tape/disk/drum device files contains device numbers
+        - run.c: go device support, execute IN 0(U), start from 0
+        - main.c: switches
+                -g device       set GO device
+                -h              help
+                -r              redirect reader/punch/printer to files
+        - run.c,io.c: busy I/O devices, simulated I/O time
+        - run.c: flush outstanding I/O at HLT
+        - added mixref.pdf
+
+180116AP
+        - changed delta, sigma, gamma to ~, [, #
+        - charset.c: card cannot read/punch: sigma, gamma, $, <, ...
+                     (20, 21, 49, 50, ...)
+        - io.c: overpunch (11-punch) in card reader
+        - driver.c: ALF is a synonym to CON
+        - parse.c: parse_expr() do not clobber overflow
