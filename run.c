@@ -121,6 +121,7 @@ static jmp_buf escape_k;    /* continuation to escape from interpreter */
 static Byte C;
 static Byte F;
 static Cell M;
+static Flag io_done;
 
 void print_DUMP(void)
 {
@@ -197,8 +198,8 @@ static void do_special(void)
 	    break;
 	}
 	case 2: /* HLT */
-            do { do_scheduled_io(1); } while (io_scheduled());
-	        longjmp(escape_k, 1);
+            elapsed_time += io_finish();
+	    longjmp(escape_k, 1);
             break;
 	default: error("Unknown extended opcode");
     }
@@ -326,9 +327,9 @@ static void do_jred(void)
         jump();
 }
 
-static void do_ioc(void)    { io_control(F, r[X], M); }
-static void do_in(void)     { do_input(F, r[X], cell_to_address(M)); }
-static void do_out(void)    { do_output(F, r[X], cell_to_address(M)); }
+static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); io_done = true; }
+static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)) ; io_done = true; }
+static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); io_done = true; }
 
 static void do_addr_op(void)
 {
@@ -516,10 +517,11 @@ void run(void)
     	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
     	    /* MOV adds 2 clocks per word */
     	    start_time = elapsed_time;
+            io_done = false;
     	    frequency[pc]++; pc++;
     	    op_table[C].action();
     	    elapsed_time += op_table[C].clocks;
-            if (io_scheduled())
+            if (!io_done && io_scheduled())
                 do_scheduled_io(elapsed_time - start_time);
     	}
     }

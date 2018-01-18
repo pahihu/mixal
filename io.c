@@ -15,7 +15,7 @@ static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
 #define READ    (-1)
-#define WRITE   (-(num_devices + 1))
+#define WRITE   (-((int) num_devices + 1))
 
 /* --- Device tables --- */
 
@@ -216,12 +216,15 @@ static void do_io(Byte device)
     devices[device].busy = 0;
 }
 
-static void do_operation(Byte device, Operation operation,
-                         Cell argument, Cell offset, Address buffer)
+static unsigned do_operation(Byte device, Operation operation,
+                             Cell argument, Cell offset, Address buffer)
 {
+    unsigned clocks = 0;
+
     if (devices[device].busy) {
-        idle_time += devices[device].busy;
-        do_scheduled_io(devices[device].busy);
+        clocks = devices[device].busy;
+        idle_time += clocks;
+        do_scheduled_io(clocks);
     }
 
     if (attributes(device)->io_time)
@@ -234,22 +237,22 @@ static void do_operation(Byte device, Operation operation,
         case output:  attributes(device)->out_handler(device, argument, buffer); break;
         }
     }
-    
+    return clocks;
 }
 
-void io_control(Byte device, Cell argument, Cell offset)
+unsigned io_control(Byte device, Cell argument, Cell offset)
 {
-    do_operation(device, control, argument, offset, 0);
+    return do_operation(device, control, argument, offset, 0);
 }
 
-void do_input(Byte device, Cell argument, Address buffer)
+unsigned do_input(Byte device, Cell argument, Address buffer)
 {
-    do_operation(device, input, argument, 0, buffer);
+    return do_operation(device, input, argument, 0, buffer);
 }
 
-void do_output(Byte device, Cell argument, Address buffer)
+unsigned  do_output(Byte device, Cell argument, Address buffer)
 {
-    do_operation(device, output, argument, 0, buffer);
+    return do_operation(device, output, argument, 0, buffer);
 }
 
 /* --- Unsupported input or output --- */
@@ -529,12 +532,12 @@ Byte io_go_device(void)
 
 /* --- time dependent I/O --- */
 
-void do_scheduled_io(unsigned tyme)
+void do_scheduled_io(unsigned clocks)
 {
     int i;
     Byte device;
 
-    for (i = 0; i < tyme; i++) {
+    for (i = 0; i < clocks; i++) {
         next_scheduled_io = (unsigned) -1;
         for (device = 0; device < num_devices; device++) {
             if (devices[device].busy) {
@@ -560,7 +563,7 @@ Flag io_scheduled(void)
     return next_scheduled_io ? true : false;
 }
 
-/* --- I/O subsystem init --- */
+/* --- I/O subsystem init/finish --- */
 
 void io_init(void)
 {
@@ -569,6 +572,17 @@ void io_init(void)
         devices[i].busy = 0;
     for (i = 0; i < memory_size; i++)
         incomplete[i] = -WRITE;
+}
+
+unsigned io_finish(void)
+{
+    unsigned clocks = 0;
+    while (next_scheduled_io) {
+        do_scheduled_io(1);
+        clocks++;
+        idle_time++;
+    }
+    return clocks;
 }
 
 /* --- I/O incomplete support --- */
