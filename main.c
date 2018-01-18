@@ -121,12 +121,14 @@ static void assemble_file(const char *filename)
 
 static void usage()
 {
-    fprintf(stderr, "usage: mixal [-g(o) device] [-h(elp)] [-r(edirect reader/punch/printer)]\n");
+    fprintf(stderr, "usage: mixal [-d(ump)] [-g(o) device] [-h(elp)] [-r(edirect reader/punch/printer)] [-t(trace) n]\n");
     exit(1);
 }
 
 int main(int argc, char **argv)
 {
+    Flag dump = false;
+    
     precompute_field_data();
 
     /* Assemble the input: */
@@ -134,38 +136,45 @@ int main(int argc, char **argv)
     if (argc == 1)
 	assemble_file("-");
     else {
-	int i;
-	for (i = 1; i < argc; ++i) {
+    	int i;
+    	for (i = 1; i < argc; ++i) {
             if (*argv[i] == '-')
                 switch (argv[i][1]) {
-                case 'g': if (++i == argc) usage();
+                case 'd':
+                    dump = true; break;
+                case 'g':
+                    if (++i == argc) usage();
                     io_set_go_device(atol(argv[i])); break;
                 case 'h':
                     usage(); break;
                 case 'r':
                     io_redirect(); break;
+                case 't':
+                    if (++i == argc) usage();
+                    set_trace_count(atol(argv[i])); break;
                 default:
                     usage();
                 }
             else
-	        assemble_file(argv[i]);
+            assemble_file(argv[i]);
         }
     }
     resolve_generated_futures();
     if (num_errors != 0) {
-	fprintf(stderr, "%u errors found\n", num_errors);
-	exit(1);
+	    fprintf(stderr, "%u errors found\n", num_errors);
+	    exit(1);
     }
 
     /* Now run it: */
     set_initial_state();
     {
-	clock_t finish, start = clock();
-	run();
-	finish = clock();
-	fprintf(stderr, "%g seconds elapsed\n", 
-		(float)(finish - start) / CLOCKS_PER_SEC);
+	    clock_t finish, start = clock();
+	    run();
+	    finish = clock();
+	    fprintf(stderr, "%g seconds elapsed\n", 
+		        (float)(finish - start) / CLOCKS_PER_SEC);
     }
     print_CPU_state();
+    if (dump) print_DUMP();
     return 0;
 }

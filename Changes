@@ -1,4 +1,8 @@
 180118AP
+        - io.c, run.c: track idle time waiting for I/O to complete
+        - run.c: instruction execution trace, memory dump
+
+180118AP
         - run.c: memory_fetch/store, safe_fetch/store checks incomplete I/O
                  MOV changes elapsed_time, do_scheduled_io() takes into account
         - symbol.c: MinGW has stricmp()

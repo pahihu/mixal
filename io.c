@@ -12,6 +12,7 @@
 static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
 static Byte go_device = 255;                /* no default GO device */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
+unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
 #define READ    (-1)
 #define WRITE   (-(num_devices + 1))
@@ -215,43 +216,40 @@ static void do_io(Byte device)
     devices[device].busy = 0;
 }
 
-void io_control(Byte device, Cell argument, Cell offset)
+static void do_operation(Byte device, Operation operation,
+                         Cell argument, Cell offset, Address buffer)
 {
-    if (devices[device].busy)
+    if (devices[device].busy) {
+        idle_time += devices[device].busy;
         do_scheduled_io(devices[device].busy);
+    }
 
     if (attributes(device)->io_time)
-        io_schedule(device, control, argument, offset, 0); 
+        io_schedule(device, operation, argument, offset, buffer); 
     else {
         ensure_open(device);
-        attributes(device)->ioc_handler(device, argument, offset);
+        switch (operation) {
+        case control: attributes(device)->ioc_handler(device, argument, offset); break;
+        case input:   attributes(device)->in_handler(device, argument, buffer); break;
+        case output:  attributes(device)->out_handler(device, argument, buffer); break;
+        }
     }
+    
+}
+
+void io_control(Byte device, Cell argument, Cell offset)
+{
+    do_operation(device, control, argument, offset, 0);
 }
 
 void do_input(Byte device, Cell argument, Address buffer)
 {
-    if (devices[device].busy)
-        do_scheduled_io(devices[device].busy);
-
-    if (attributes(device)->io_time)
-        io_schedule(device, input, argument, 0, buffer);
-    else {
-        ensure_open(device);
-        attributes(device)->in_handler(device, argument, buffer);
-    }
+    do_operation(device, input, argument, 0, buffer);
 }
 
 void do_output(Byte device, Cell argument, Address buffer)
 {
-    if (devices[device].busy)
-        do_scheduled_io(devices[device].busy);
-
-    if (attributes(device)->io_time)
-        io_schedule(device, output, argument, 0, buffer);
-    else {
-        ensure_open(device);
-        attributes(device)->out_handler(device, argument, buffer);
-    }
+    do_operation(device, output, argument, 0, buffer);
 }
 
 /* --- Unsupported input or output --- */

@@ -9,7 +9,11 @@ Changes:
   * reference card (see mixref.pdf)
   * overlapping I/O buffer checks, incomplete I/O detection
   * MinGW port
+  * count idle time waiting for I/O to complete
+  * instruction execution trace
+  * memory dump of non-zero locations, with instruction frequency counts
 
-**NOTE**: Use the code! Good luck!
+**NOTE**: execution trace and memory dump mechanics loosely 
+follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971
 
 

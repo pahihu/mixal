@@ -1,0 +1,21 @@
+*    EXAMPLE MIX DECK
+*
+*    RUN
+*        cp data.cdk reader
+*        mixal -r example.mix
+*
+READER     EQU  16
+PRINTER    EQU  18
+BUFFER     EQU  1010+24
+           ORIG 1000
+START      IN   BUFFER(READER)
+           JBUS *(READER)
+           LDA  BUFFER
+           LD1  =23=
+1H         STA  BUFFER,1
+           DEC1 1
+           J1P  1B
+           STZ  BUFFER+2(1:2)
+           OUT  BUFFER(PRINTER)
+           HLT  *
+           END  START

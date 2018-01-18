@@ -4,6 +4,8 @@
 
 #include "mix.h"
 
+extern unsigned long idle_time;             /* in Tyme units, waiting for I/O */
+
 void io_init(void);
 void io_control(Byte device, Cell argument, Cell offset);
 void do_input(Byte device, Cell argument, Address buffer);

@@ -9,6 +9,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static void stop(const char *message, va_list args)
 {
@@ -26,6 +27,8 @@ static unsigned long elapsed_time = 0;      /* in Tyme units */
 /* --- The CPU state --- */
 
 Cell memory[memory_size];
+unsigned frequency[memory_size];            /* frequency counts */
+unsigned trace_count = 0;                   /* do not trace instructions */
 
 #define A 0
 #define X 7
@@ -34,6 +37,11 @@ static Cell r[10];      /* the registers; except that r[9] == zero. */
 
 static int comparison_indicator;    /* the overflow toggle is defined in cell.c */
 static Address pc;      /* the program counter */
+
+void set_trace_count(unsigned value)
+{
+    trace_count = value;
+}
 
 void set_initial_state(void)
 {
@@ -55,10 +63,10 @@ void print_CPU_state(void)
     print_cell (r[A]);
     printf ("\t");
     {				/* Print the index registers: */
-      unsigned i;
-      for (i = 1; i <= 6; ++i)
-	  printf ("I%u:%s%04lo  ",
-		  i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+        unsigned i;
+        for (i = 1; i <= 6; ++i)
+	        printf ("I%u:%s%04lo  ",
+		        i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf ("\nX:");
     print_cell (r[X]);
@@ -68,7 +76,7 @@ void print_CPU_state(void)
 	    comparison_indicator < 0 ? "less" :
 	      comparison_indicator == 0 ? "equal" : "greater",
 	    overflow ? "overflow" : "");
-    printf (" %11lu elapsed\n", elapsed_time);
+    printf (" %11lu elapsed (%lu idle)\n", elapsed_time, idle_time);
 }
 
 /* --- Memory access --- */
@@ -114,6 +122,41 @@ static Byte C;
 static Byte F;
 static Cell M;
 
+void print_DUMP(void)
+{
+    int i, j;
+    Address address = 0;
+    
+    printf ("\n");
+    printf ("CONTENTS OF MIX MEMORY (NONZERO LOCATIONS ONLY)\n\n");
+    printf ("LOC        0           1           2           3              FREQUENCY COUNTS\n");
+    for (i = 0; i < memory_size / 4; i++, address += 4) {
+        Flag has_nonzero = false;
+        for (j = 0; !has_nonzero && j < 4; j++) {
+            Cell value = memory_fetch(address + j);
+            if (magnitude(value))
+                has_nonzero = true;
+        }
+        if (!has_nonzero)
+            continue;
+        printf ("%04o:", address);
+        for (j = 0; j < 4; j++) {
+            Cell value = memory_fetch(address + j);
+            if (magnitude(value)) {
+                printf (" ");
+                print_cell (value);
+            }
+            else
+                printf (" %11s", "");
+        }
+        printf("     ");
+        for (j = 0; j < 4; j++) {
+            printf(" %05d", frequency[address + j]);
+        }
+        printf("\n");
+    }
+}
+
 static Cell get_V(void)
 {
     return field(F, safe_fetch(cell_to_address(M)));
@@ -155,7 +198,7 @@ static void do_special(void)
 	}
 	case 2: /* HLT */
             do { do_scheduled_io(1); } while (io_scheduled());
-	    longjmp(escape_k, 1);
+	        longjmp(escape_k, 1);
             break;
 	default: error("Unknown extended opcode");
     }
@@ -317,79 +360,127 @@ static void do_compare(void)
 static const struct {
     void (*action)(void);
     unsigned clocks;
+    const char *mnemonic;
 } op_table[64] = {
-    { do_nop, 1 },
-    { do_add, 2 },
-    { do_sub, 2 },
-    { do_mul, 10 },
-    { do_div, 12 },
-    { do_special, 1 },
-    { do_shift, 2 },
-    { do_move, 1 },
+    { do_nop, 1, "NOP" },
+    { do_add, 2, "ADD" },
+    { do_sub, 2, "SUB" },
+    { do_mul, 10, "MUL" },
+    { do_div, 12, "DIV" },
+    { do_special, 1, "*NUM CHARHLT " },
+    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC " },
+    { do_move, 1, "MOV" },
 
-    { do_lda, 2 },
-    { do_ldi, 2 },
-    { do_ldi, 2 },
-    { do_ldi, 2 },
-    { do_ldi, 2 },
-    { do_ldi, 2 },
-    { do_ldi, 2 },
-    { do_ldx, 2 },
+    { do_lda, 2, "LDA" },
+    { do_ldi, 2, "LD1" },
+    { do_ldi, 2, "LD2" },
+    { do_ldi, 2, "LD3" },
+    { do_ldi, 2, "LD4" },
+    { do_ldi, 2, "LD5" },
+    { do_ldi, 2, "LD6" },
+    { do_ldx, 2, "LDX" },
 
-    { do_ldan, 2 },
-    { do_ldin, 2 },
-    { do_ldin, 2 },
-    { do_ldin, 2 },
-    { do_ldin, 2 },
-    { do_ldin, 2 },
-    { do_ldin, 2 },
-    { do_ldxn, 2 },
+    { do_ldan, 2, "LDAN" },
+    { do_ldin, 2, "LD1N" },
+    { do_ldin, 2, "LD2N" },
+    { do_ldin, 2, "LD3N" },
+    { do_ldin, 2, "LD4N" },
+    { do_ldin, 2, "LD5N" },
+    { do_ldin, 2, "LD6N" },
+    { do_ldxn, 2, "LDXN" },
 
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_store, 2 },
+    { do_store, 2, "STA" },
+    { do_store, 2, "ST1" },
+    { do_store, 2, "ST2" },
+    { do_store, 2, "ST3" },
+    { do_store, 2, "ST4" },
+    { do_store, 2, "ST5" },
+    { do_store, 2, "ST6" },
+    { do_store, 2, "STX" },
 
-    { do_store, 2 },
-    { do_store, 2 },
-    { do_jbus, 1 },
-    { do_ioc, 1 },
-    { do_in, 1 },
-    { do_out, 1 },
-    { do_jred, 1 },
-    { do_jump, 1 },
+    { do_store, 2, "STJ" },
+    { do_store, 2, "STZ" },
+    { do_jbus, 1, "JBUS" },
+    { do_ioc, 1, "IOC" },
+    { do_in, 1, "IN" },
+    { do_out, 1, "OUT" },
+    { do_jred, 1, "JRED" },
+    { do_jump, 1, "*JMP JSJ JOV JNOVJL  JE  JG  JGE JNE JLE " },
 
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
-    { do_reg_branch, 1 },
+    { do_reg_branch, 1, "*JAN JAZ JAP JANNJANZJANP" },
+    { do_reg_branch, 1, "*J1N J1Z J1P J1NNJ1NZJ1NP" },
+    { do_reg_branch, 1, "*J2N J2Z J2P J2NNJ2NZJ2NP" },
+    { do_reg_branch, 1, "*J3N J3Z J3P J3NNJ3NZJ3NP" },
+    { do_reg_branch, 1, "*J4N J4Z J4P J4NNJ4NZJ4NP" },
+    { do_reg_branch, 1, "*J5N J5Z J5P J5NNJ5NZJ5NP" },
+    { do_reg_branch, 1, "*J6N J6Z J6P J6NNJ6NZJ6NP" },
+    { do_reg_branch, 1, "*JXN JXZ JXP JXNNJXNZJXNP" },
 
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
-    { do_addr_op, 1 },
+    { do_addr_op, 1, "*INCADECAENTAENNA" },
+    { do_addr_op, 1, "*INC1DEC1ENT1ENN1" },
+    { do_addr_op, 1, "*INC2DEC2ENT2ENN2" },
+    { do_addr_op, 1, "*INC3DEC3ENT3ENN3" },
+    { do_addr_op, 1, "*INC4DEC4ENT4ENN4" },
+    { do_addr_op, 1, "*INC5DEC5ENT5ENN5" },
+    { do_addr_op, 1, "*INC6DEC6ENT6ENN6" },
+    { do_addr_op, 1, "*INCXDECXENTXENNX" },
 
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
-    { do_compare, 2 },
+    { do_compare, 2, "CMPA" },
+    { do_compare, 2, "CMP1" },
+    { do_compare, 2, "CMP2" },
+    { do_compare, 2, "CMP3" },
+    { do_compare, 2, "CMP4" },
+    { do_compare, 2, "CMP5" },
+    { do_compare, 2, "CMP6" },
+    { do_compare, 2, "CMPX" },
 };
+
+static const char* mnemonic(Byte C, Byte F)
+{
+    static char buffer[5];
+    const char *ret = op_table[C].mnemonic;
+    
+    if (*ret == '*') {
+        strncpy(buffer, ret + 1 + F * 4, 4);
+        buffer[4] = '\0';
+        ret = buffer;
+    }
+    return ret;
+}
+
+void print_CPU_trace(Flag header)
+{
+    Byte I;
+    Cell instruction;
+    
+    if (header) {
+        printf (" LOC FREQ INSTRUCTION OP    OPERAND   |  REGISTER A  REGISTER X  RI1   RI2   RI3   RI4   RI5   RI6   RJ  OV CI    TYME\n");
+        // printf ("1000 0001 +1234567890 JBUS +1234567890| +1234567890 +1234567890 +0000 +0000 +0000 +0000 +0000 +0000 +1007 X E  00014435\n");
+        return;
+    }
+
+    instruction = safe_fetch(pc);
+    destructure_cell(instruction, M, I, F, C);
+    printf ("%04o %04d ", pc, frequency[pc]);
+    print_cell (instruction);
+    printf (" %-4s ", mnemonic (C, F));
+    print_cell (M);
+    printf ("| ");
+    print_cell (r[A]);
+    printf (" ");
+    print_cell (r[X]);
+    {
+        unsigned i;
+        for (i = 1; i <= 6; ++i)
+	        printf (" %s%04lo",
+		                is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+    }
+    printf (" +%04lo", magnitude (r[J]));
+    printf (" %s %s ", overflow ? "X" : " ",
+                       comparison_indicator < 0 ? "L" :
+                            comparison_indicator == 0 ? "E" : "G");
+    printf (" %08lu\n", elapsed_time);
+}
 
 void run(void)
 {
@@ -406,6 +497,8 @@ void run(void)
         pc = 0;
     }
 
+    if (trace_count)
+        print_CPU_trace(true);
     for (;;) {
 /*      print_CPU_state(); */
     	if (memory_size <= pc)
@@ -413,14 +506,17 @@ void run(void)
     	{
     	    Byte I;
     	    unsigned long start_time;
-    	    
-    	    destructure_cell(safe_fetch(pc++), M, I, F, C);
+
+    	    if (trace_count && (frequency[pc] <= trace_count))
+    	        print_CPU_trace(false);
+    	    destructure_cell(safe_fetch(pc), M, I, F, C);
     	    if (6 < I)
     		    error("Invalid I-field: %u", I);
     	    if (I != 0)
     	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
     	    /* MOV adds 2 clocks per word */
     	    start_time = elapsed_time;
+    	    frequency[pc]++; pc++;
     	    op_table[C].action();
     	    elapsed_time += op_table[C].clocks;
             if (io_scheduled())
