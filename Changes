@@ -1,3 +1,13 @@
+180118AP
+        - run.c: memory_fetch/store, safe_fetch/store checks incomplete I/O
+                 MOV changes elapsed_time, do_scheduled_io() takes into account
+        - symbol.c: MinGW has stricmp()
+        - io.c: buffers are protected for write/read access
+                output operation locks buffer for READ
+                input operation locks buffer for WRITE
+                buffers cannot overlap, except for output operations
+                safe_fetch/store enforces this access for the MIX CP as well
+
 180117AP
         - io.c: go device, reader/punch/printer could redirected to files
                 only tape/disk/drum device files contains device numbers

@@ -7,6 +7,8 @@ Changes:
   * time dependent I/O
   * card reader/punch and printer can use files instead of stdin/stdout
   * reference card
+  * overlapping I/O buffer checks, incomplete I/O detection
+  * MinGW port
 
 **NOTE**: Use the code! Good luck!
 

@@ -71,6 +71,37 @@ void print_CPU_state(void)
     printf (" %11lu elapsed\n", elapsed_time);
 }
 
+/* --- Memory access --- */
+
+Cell memory_fetch(Address address)
+{
+	if (memory_size <= address)
+	    error("Address out of range");
+    return memory[address];
+}
+
+void memory_store(Address address, Cell cell)
+{
+    if (memory_size <= address)
+	    error("Address out of range");
+	memory[address] = cell;
+}
+
+/* --- I/O protected memory access */
+static Cell safe_fetch(Address address)
+{
+    if (io_incomplete(address, read_access))
+        error("Incomplete I/O -- safe_fetch");
+    return memory_fetch(address);
+}
+
+static void safe_store(Address address, Cell cell)
+{
+    if (io_incomplete(address, write_access))
+        error("Incomplete I/O -- safe_store");
+    memory_store(address, cell);
+}
+
 /* --- The interpreter --- */
 
 /* --- I've followed Knuth's MIX interpreter quite closely. */
@@ -85,7 +116,7 @@ static Cell M;
 
 static Cell get_V(void)
 {
-    return field(F, memory[cell_to_address(M)]);
+    return field(F, safe_fetch(cell_to_address(M)));
 }
 
 /* do_foo performs the action of instruction type foo. */
@@ -167,10 +198,11 @@ static void do_move(void)
     Address to = cell_to_address(r[1]);
     unsigned count = F;
     for (; count != 0; --count) {
-	if (memory_size <= from + count || memory_size <= to + count)
-	    error("Address out of range");
-	memory[to + count] = memory[from + count];
-	elapsed_time += 2;
+	    // if (memory_size <= from + count || memory_size <= to + count)
+	        // error("Address out of range");
+	    // memory[to + count] = memory[from + count];
+	    safe_store(to + count, safe_fetch(from + count));
+	    elapsed_time += 2;
     }
     r[1] = address_to_cell(to + count);
 }
@@ -196,7 +228,8 @@ static void do_ldin(void) {
 static void do_store(void)
 {
     Address a = cell_to_address(M);
-    memory[a] = set_field(r[C-24], F, memory[a]);
+    // memory[a] = set_field(r[C-24], F, memory[a]);
+    safe_store(a, set_field(r[C-24], F, safe_fetch(a)));
 }
 
 static void jump(void)
@@ -276,7 +309,7 @@ static void do_compare(void)
 {
     Flag saved = overflow;
     Cell difference = sub(field(F, r[C & 7]), 
-			  field(F, memory[cell_to_address(M)]));
+			  field(F, safe_fetch(cell_to_address(M))));
     comparison_indicator = sign_of_difference(difference);
     overflow = saved;
 }
@@ -375,19 +408,23 @@ void run(void)
 
     for (;;) {
 /*      print_CPU_state(); */
-	if (memory_size <= pc)
-	    error("Program counter out of range: %4o", pc);
-	{
-	    Byte I;
-	    destructure_cell(memory[pc++], M, I, F, C);
-	    if (6 < I)
-		error("Invalid I-field: %u", I);
-	    if (I != 0)
-	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
-	    op_table[C].action();
-	    elapsed_time += op_table[C].clocks;
+    	if (memory_size <= pc)
+    	    error("Program counter out of range: %4o", pc);
+    	{
+    	    Byte I;
+    	    unsigned long start_time;
+    	    
+    	    destructure_cell(safe_fetch(pc++), M, I, F, C);
+    	    if (6 < I)
+    		    error("Invalid I-field: %u", I);
+    	    if (I != 0)
+    	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
+    	    /* MOV adds 2 clocks per word */
+    	    start_time = elapsed_time;
+    	    op_table[C].action();
+    	    elapsed_time += op_table[C].clocks;
             if (io_scheduled())
-                do_scheduled_io(op_table[C].clocks);
-	}
+                do_scheduled_io(elapsed_time - start_time);
+    	}
     }
 }

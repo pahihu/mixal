@@ -11,33 +11,34 @@ Address here = 0;
 Cell asm_fetch_field(Address address, unsigned L, unsigned R)
 {
     assert(address < memory_size);
-    return field(make_field_spec(L, R), memory[address]);
+    return field(make_field_spec(L, R), memory_fetch(address));
 }
 
 #include <stdio.h>
 
 void asm_store_field(Address address, unsigned L, unsigned R, Cell cell)
 {
-    assert(address < memory_size);
+    // assert(address < memory_size);
     if (VERBOSE) {
-	char temp[12];
-	unparse_cell(temp, cell);
-	printf("%4o(%u,%u): %s\n", address, L, R, temp);
+	    char temp[12];
+	    unparse_cell(temp, cell);
+	    printf("%4o(%u,%u): %s\n", address, L, R, temp);
     }
-    memory[address] = set_field(cell, make_field_spec(L, R), memory[address]);
+    memory_store(address, set_field(cell, make_field_spec(L, R), memory_fetch(address)));
 }
 
 void assemble(Cell cell)
 {
     if (VERBOSE) {
         char temp[12];
-	unparse_cell(temp, cell);
-	printf("%4o: %s\n", here, temp);
+	    unparse_cell(temp, cell);
+	    printf("%4o: %s\n", here, temp);
     }
-    if (here < memory_size)
-	memory[here] = cell;
-    else
-	error("Address out of range");
+    // if (here < memory_size)
+    //	memory[here] = cell;
+    // else
+	//  error("Address out of range");
+	memory_store(here, cell);
     ++here;
 }
 

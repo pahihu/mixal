@@ -9,9 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int redirect_devices = 0;        /* stdin/stdout is card reader/printer*/
-static Byte go_device = 255;            /* no default GO device */
-static unsigned next_scheduled_io = 0;  /* next I/O time */
+static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
+static Byte go_device = 255;                /* no default GO device */
+static unsigned next_scheduled_io = 0;      /* next I/O time */
+int incomplete[memory_size];                /* mark cell used by I/O */
+#define READ    (-1)
+#define WRITE   (-(num_devices + 1))
 
 /* --- Device tables --- */
 
@@ -130,6 +133,18 @@ static void ensure_open(Byte device)
     }
 }
 
+static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
+{
+    int i;
+    for (i = 0; i < block_size; i++) {
+        if (memory_size <= buffer + i)
+            error("Address out of range -- io_mark_incomplete");
+        if (incomplete[buffer + i] + mark < 0)
+            error("Overlapping buffers -- io_mark_incomplete");
+        incomplete[buffer + i] += mark;
+    }
+}
+
 static void io_schedule(Byte device, Operation operation, 
                         Cell argument, Cell offset, Address buffer)
 {
@@ -157,6 +172,9 @@ static void io_schedule(Byte device, Operation operation,
     if ((operation == input) || (operation == output)) {
         if (device_type == disk)
             busy += seek_time * labs(devices[device].position - offset);
+        io_mark_incomplete(buffer,
+                           attributes(device)->block_size,
+                           operation == input ? WRITE : READ);
     }
     devices[device].busy = busy;
 
@@ -171,14 +189,16 @@ static void do_io(Byte device)
 {
     Cell argument, offset;
     Address buffer;
+    Operation operation;
 
-    argument = devices[device].argument;
-    offset   = devices[device].offset;
-    buffer   = devices[device].buffer;
+    operation = devices[device].operation;
+    argument  = devices[device].argument;
+    offset    = devices[device].offset;
+    buffer    = devices[device].buffer;
 
     ensure_open(device);
     current_device_type = devices[device].type;
-    switch (devices[device].operation) {
+    switch (operation) {
     case control:
         attributes(device)->ioc_handler(device, argument, offset); break;
     case input:
@@ -186,6 +206,12 @@ static void do_io(Byte device)
     case output:
         attributes(device)->out_handler(device, argument, buffer); break;
     }
+    
+    if (operation != control)
+        io_mark_incomplete(buffer,
+                           attributes(device)->block_size, 
+                           operation == input ? -WRITE : -READ);
+        
     devices[device].busy = 0;
 }
 
@@ -258,9 +284,6 @@ static void read_line(FILE* file, Address buffer, unsigned size)
     Flag past_end = false;
     for (i = 0; i < size; ++i) {
 	    Cell cell = zero;
-	    if (memory_size <= buffer + i)
-        /*** I think we need memory_fetch() and memory_store() functions... */
-	        error("Address out of range");
 	    for (b = 1; b <= 5; ++b) {
 	        Byte mix_char;
 	        if (past_end)
@@ -274,7 +297,7 @@ static void read_line(FILE* file, Address buffer, unsigned size)
 	        }
 	        cell = set_byte(mix_char, b, cell);
 	    }
-	    memory[buffer + i] = cell;
+	    memory_store(buffer + i, cell);
     }
 }
 
@@ -290,11 +313,8 @@ static void write_cell(Cell cell, FILE *outfile, Flag text)
 static void write_line(FILE *file, Address buffer, unsigned size, Flag text)
 {
     unsigned i;
-    for (i = 0; i < size; ++i) {
-	if (memory_size <= buffer + i)
-	    error("Address out of range");
-	write_cell(memory[buffer + i], file, text);
-    }
+    for (i = 0; i < size; ++i)
+	    write_cell(memory_fetch(buffer + i), file, text);
     fputc('\n', file);
 }
 
@@ -333,11 +353,11 @@ static void text_in(Byte device, Cell argument, Address buffer)
     read_line(assigned_file(device), buffer, block_size(device));
     if (current_device_type == card_in) {
         for (i = 0; i < 16; i += 2) {
-            Cell cell1 = memory[buffer + i    ];
-            Cell cell2 = memory[buffer + i + 1];
+            Cell cell1 = memory_fetch(buffer + i    );
+            Cell cell2 = memory_fetch(buffer + i + 1);
             if (overpunched(cell2)) {
-                memory[buffer + i    ] = flip_chars(cell1);
-                memory[buffer + i + 1] = flip_chars(cell2);
+                memory_store(buffer + i    , flip_chars(cell1));
+                memory_store(buffer + i + 1, flip_chars(cell2));
             }
         }
     }
@@ -380,24 +400,21 @@ static void read_block(Byte device, Address buffer)
     unsigned size = block_size(device);
     unsigned i, b;
     for (i = 0; i < size; ++i) {
-	int c;
-	Cell cell = zero;
-	if (memory_size <= buffer + i)
-	    error("Address out of range -- read_block");
-
-	c = fgetc(file);
-	if (c == EOF)
-	    error("Unexpected EOF reading from device %02o", device);
-	else if (c == '-')
-	    cell = negative(cell);
-
-	for (b = 1; b <= 5; ++b) {
-	    c = fgetc(file);
-	    if (c == EOF)
-		error("Unexpected EOF reading from device %02o", device);
-	    cell = set_byte(C_char_to_mix((char) c), b, cell);
-	}
-	memory[buffer + i] = cell;
+    	int c;
+    	Cell cell = zero;
+    	c = fgetc(file);
+    	if (c == EOF)
+    	    error("Unexpected EOF reading from device %02o", device);
+    	else if (c == '-')
+    	    cell = negative(cell);
+    
+    	for (b = 1; b <= 5; ++b) {
+    	    c = fgetc(file);
+    	    if (c == EOF)
+    		    error("Unexpected EOF reading from device %02o", device);
+    	    cell = set_byte(C_char_to_mix((char) c), b, cell);
+    	}
+    	memory_store(buffer + i, cell);
     }
     fgetc(file);			/* should be '\n' */
 }
@@ -490,10 +507,14 @@ static void console_out(Byte device, Cell argument, Address buffer)
     write_line(stdout, buffer, block_size(device), true);
 }
 
+/* --- redirect reader/punc/printer to files --- */
+
 void io_redirect(void)
 {
    redirect_devices = 1;
 }
+
+/* --- GO button support --- */
 
 void io_set_go_device(Byte device)
 {
@@ -507,6 +528,8 @@ Byte io_go_device(void)
 {
     return go_device;
 }
+
+/* --- time dependent I/O --- */
 
 void do_scheduled_io(unsigned tyme)
 {
@@ -527,7 +550,6 @@ void do_scheduled_io(unsigned tyme)
         if (next_scheduled_io == (unsigned) -1)
             next_scheduled_io = 0;
     }
-
 }
 
 Flag io_device_busy(Byte device)
@@ -540,11 +562,33 @@ Flag io_scheduled(void)
     return next_scheduled_io ? true : false;
 }
 
+/* --- I/O subsystem init --- */
+
 void io_init(void)
 {
-    Byte device;
+    Byte i;
+    for (i = 0; i < num_devices; i++)
+        devices[i].busy = 0;
+    for (i = 0; i < memory_size; i++)
+        incomplete[i] = -WRITE;
+}
 
-    for (device = 0; device < num_devices; device++) {
-        devices[device].busy = 0;
-    }
+/* --- I/O incomplete support --- */
+
+Flag io_incomplete(Address address, Access access)
+{
+    Flag ret = false;
+    int count;
+    
+    if (memory_size <= address)
+        error("Address out of range -- io_incomplete");
+        
+    count = incomplete[address];
+    if (count == -WRITE)                    /* it is free */
+        ret = false;
+    else if (access == write_access)        /* either written to, or read from , therefore not writable */
+        ret = false;
+    else if (access == read_access)         /* if read from, then readable */
+        ret = count ? true : false;
+    return ret;
 }

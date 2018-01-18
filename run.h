@@ -9,5 +9,7 @@ extern Cell memory[];
 void set_initial_state(void);
 void print_CPU_state(void);
 void run(void);
+Cell memory_fetch(Address address);                 /* fetch memory from address, range checked */
+void memory_store(Address address, Cell cell);      /* store cell at address, range checked */
 
 #endif
