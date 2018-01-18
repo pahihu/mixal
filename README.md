@@ -6,7 +6,7 @@ Changes:
   * tape devices
   * time dependent I/O
   * card reader/punch and printer can use files instead of stdin/stdout
-  * reference card
+  * reference card (see mixref.pdf)
   * overlapping I/O buffer checks, incomplete I/O detection
   * MinGW port
 
