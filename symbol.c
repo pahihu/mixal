@@ -53,6 +53,7 @@ static void *allot(size_t size)
     return result;
 }
 
+#if !defined(__MINGW32__)
 static int stricmp(const char *s, const char *t)
 {
     while (*s && *t)
@@ -62,6 +63,7 @@ static int stricmp(const char *s, const char *t)
 	    s++, t++;
     return tolower(*s) != tolower(*t);
 }
+#endif
 
 /* --- The symbol table --- */
 
