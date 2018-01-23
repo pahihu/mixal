@@ -1,3 +1,9 @@
+180123AP
+        - io.c: low end Burroughs B5500 peripheral timing
+                tyme is 2us access time for B461 memory module
+                drum restricted to   64 blocks (6,400W)
+                tape restricted to 7680 blocks (7,680,000W)
+
 180118AP
         - io.c, run.c: track idle time waiting for I/O to complete
         - run.c: instruction execution trace, memory dump
@@ -31,3 +37,4 @@
         - io.c: overpunch (11-punch) in card reader
         - driver.c: ALF is a synonym to CON
         - parse.c: parse_expr() do not clobber overflow
+

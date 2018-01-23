@@ -58,6 +58,7 @@ static IOCHandler tape_ioc, disk_ioc, no_ioc, printer_ioc;
 /*** need to distinguish read/write permission... */
 static const struct Device_attributes {
     const char *base_filename;
+    unsigned  size;
     unsigned block_size;
     IOHandler *in_handler;
     IOHandler *out_handler;
@@ -66,13 +67,13 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* tape */      { "tape",   100, tape_in, tape_out, tape_ioc,       50,    50},
-/* disk */      { "disk",   100, disk_in, disk_out, disk_ioc,      250,     1},
-/* drum */      { "drum",   100, disk_in, disk_out, disk_ioc,      125,     0},
-/* card_in */   { "reader",  16, text_in, no_out,   no_ioc,      10000,     0},
-/* card_out */  { "punch",   16, no_in,   text_out, no_ioc,      20000,     0},
-/* printer */   { "printer", 24, no_in,   text_out, printer_ioc,  7500, 10000},
-/* console */   { NULL,      14, console_in, console_out, no_ioc,    0,     0}
+/* tape */      { "tape",   7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
+/* disk */      { "disk",   4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
+/* drum */      { "drum",     64, 100, disk_in, disk_out, disk_ioc,        4750,    0}, /* B430 */
+/* card_in */   { "reader",    0,  16, text_in, no_out,   no_ioc,        150000,    0}, /* B122 */
+/* card_out */  { "punch",     0,  16, no_in,   text_out, no_ioc,        300000,    0}, /* B303 */
+/* printer */   { "printer",   0,  24, no_in,   text_out, printer_ioc,    63158, 2500}, /* B320 */
+/* console */   { NULL,        0,  14, console_in, console_out, no_ioc, 3500000,    0}  /* ASR33 */
 
 };
 
@@ -157,20 +158,29 @@ static void io_schedule(Byte device, Operation operation,
     devices[device].offset    = offset;
     devices[device].buffer    = buffer;
 
-    device_type = devices[device].type;
-    seek_time   = attributes(device)->seek_time;
+    device_type   = devices[device].type;
+    seek_time     = attributes(device)->seek_time;
 
     busy = 0;
     if (operation == control) {
-        if (device_type == tape || device_type == disk)
-            busy = seek_time * labs(devices[device].position - offset);
-        else if (device_type == printer)
-            busy = seek_time;
+        switch (device_type) {
+        case tape:
+            busy = labs(devices[device].position - offset); break;
+        case disk:
+            busy = labs(devices[device].position - offset) / 64; break;
+        case printer:
+            busy = 132 - (devices[device].position % 132); break;
+        default:
+            break;
+        }
+        busy *= seek_time;
     }
-    else
-        busy  = attributes(device)->io_time;
+    else {
+        if ((device_type != console) && (operation != input))
+            busy  = attributes(device)->io_time;
+    }
 
-    if ((operation == input) || (operation == output)) {
+    if (operation == input || operation == output) {
         if (device_type == disk)
             busy += seek_time * labs(devices[device].position - offset);
         io_mark_incomplete(buffer,
@@ -205,7 +215,9 @@ static void do_io(Byte device)
     case input:
         attributes(device)->in_handler(device, argument, buffer); break;
     case output:
-        attributes(device)->out_handler(device, argument, buffer); break;
+        attributes(device)->out_handler(device, argument, buffer);
+        if (current_device_type == printer)
+            devices[device].position++;
     }
     
     if (operation != control)
@@ -376,19 +388,23 @@ static void text_out(Byte device, Cell argument, Address buffer)
 
 static void set_file_position(Byte device, unsigned block, Flag writing)
 {
-	if (devices[device].position != (long) block) {
-		if (fseek(assigned_file(device),
-	    		(long) block * external_block_size(device),
-	    		SEEK_SET))
-      		error("Device %02o: %s", device, strerror(errno));
-  		devices[device].position = (long) block;
-	}
+    if (devices[device].position != (long) block) {
+        if (attributes(device)->size != 0 && attributes(device)->size <= block)
+            error("Device %02o full!");
+        else {
+            if (fseek(assigned_file(device),
+                      (long) block * external_block_size(device),
+	    	      SEEK_SET))
+                error("Device %02o: %s", device, strerror(errno));
+  	        devices[device].position = (long) block;
+        }
+    }
 }
 
 static unsigned get_file_position(Byte device)
 {
-	return (unsigned) ftell(assigned_file(device)) 
-			/ external_block_size(device);
+    return (unsigned) ftell(assigned_file(device)) 
+                            / external_block_size(device);
 }
 
 /* Read a block from -device- into memory[buffer..buffer+block_size(device)). 
@@ -430,32 +446,32 @@ static void write_block(Byte device, Address buffer)
 
 static void tape_ioc(unsigned device, Cell argument, Cell offset)
 {
-	unsigned block_num, position;
-	FILE *fd;
-	int c;
+    unsigned block_num, position;
+    FILE *fd;
+    int c;
 
-	block_num = (unsigned) magnitude(offset);
-	if (block_num == 0)
-		set_file_position(device, 0, false);
-	else if (is_negative(offset)) {
-                position = get_file_position(device);
-                if (position < block_num)
-                        block_num = 0;
-                else
-                        block_num = position - block_num;
-	        set_file_position(device, block_num, false);
-	} else {
-		fd = assigned_file(device);
-		position = get_file_position(device);
-		while (block_num--) {
-			set_file_position(device, ++position, false);
-			c = fgetc(fd);
-			if (c == EOF)
-				break;
-			if (ungetc(c, fd) == EOF)
-      			error("Device %02o: %s", device, strerror(errno));
-		}
+    block_num = (unsigned) magnitude(offset);
+    if (block_num == 0)
+        set_file_position(device, 0, false);
+    else if (is_negative(offset)) {
+        position = get_file_position(device);
+        if (position < block_num)
+            block_num = 0;
+        else
+            block_num = position - block_num;
+	set_file_position(device, block_num, false);
+    } else {
+	fd = assigned_file(device);
+	position = get_file_position(device);
+	while (block_num--) {
+	    set_file_position(device, ++position, false);
+	    c = fgetc(fd);
+	    if (c == EOF)
+	        break;
+	    if (ungetc(c, fd) == EOF)
+      	        error("Device %02o: %s", device, strerror(errno));
 	}
+    }
 }
 
 static void tape_in(unsigned device, Cell argument, Address buffer)
@@ -465,32 +481,43 @@ static void tape_in(unsigned device, Cell argument, Address buffer)
 
 static void tape_out(unsigned device, Cell argument, Address buffer)
 {
-	write_block(device, buffer);
+    write_block(device, buffer);
 }
 
 /* --- Disks --- */
 
 static void disk_ioc(Byte device, Cell argument, Cell offset)
 {
-	unsigned block_num;
+    unsigned block_num;
 
     if (magnitude(offset) != 0)
         error("IOC argument undefined for disk device %02o", device);
 
-	block_num = (unsigned) field(make_field_spec(4, 5), argument);
-	set_file_position(device, block_num, false);
+    if (devices[device].type == drum)
+        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+    else
+        block_num = (unsigned) field(make_field_spec(4, 5), argument);
+    set_file_position(device, block_num, false);
 }
 
 static void disk_in(Byte device, Cell argument, Address buffer)
 {
-    unsigned block_num = (unsigned) field(make_field_spec(4, 5), argument);
+    unsigned block_num;
+    if (devices[device].type == drum)
+        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+    else
+        block_num = (unsigned) field(make_field_spec(4, 5), argument);
     set_file_position(device, block_num, false);
     read_block(device, buffer);
 }
 
 static void disk_out(Byte device, Cell argument, Address buffer)
 {
-    unsigned block_num = (unsigned) field(make_field_spec(4, 5), argument);
+    unsigned block_num;
+    if (devices[device].type == drum)
+        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+    else
+        block_num = (unsigned) field(make_field_spec(4, 5), argument);
     set_file_position(device, block_num, true);
     write_block(device, buffer);
 }
