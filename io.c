@@ -150,14 +150,16 @@ static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
 static void io_schedule(Byte device, Operation operation, 
                         Cell argument, Cell offset, Address buffer)
 {
-    unsigned busy, seek_time;
+    unsigned busy, seek_time, u;
     enum DeviceType device_type;
+    long position;
 
     devices[device].operation = operation;
     devices[device].argument  = argument;
     devices[device].offset    = offset;
     devices[device].buffer    = buffer;
 
+    position      = devices[device].position;
     device_type   = devices[device].type;
     seek_time     = attributes(device)->seek_time;
 
@@ -165,11 +167,23 @@ static void io_schedule(Byte device, Operation operation,
     if (operation == control) {
         switch (device_type) {
         case tape:
-            busy = labs(devices[device].position - offset); break;
+            u = magnitude(offset);
+            if (0 == u)                         /* --- rewind --- */
+                busy = position;
+            else if (is_negative(offset))       /* --- skip backward --- */
+                busy = u < position ? u : position;
+            else {                              /* --- skip forward --- */
+                busy = position + u;
+                if (busy >= attributes(device)->size)
+                    busy = attributes(device)->size - position;
+            }
+            break;
         case disk:
-            busy = labs(devices[device].position - offset) / 64; break;
+            busy = labs(position - offset) / 64;
+            break;
         case printer:
-            busy = 132 - (devices[device].position % 132); break;
+            busy = 132 - (position % 132);
+            break;
         default:
             break;
         }
@@ -177,7 +191,7 @@ static void io_schedule(Byte device, Operation operation,
     }
     else {
         if ((device_type != console) && (operation != input))
-            busy  = attributes(device)->io_time;
+            busy = attributes(device)->io_time;
     }
 
     if (operation == input || operation == output) {
@@ -472,16 +486,19 @@ static void tape_ioc(unsigned device, Cell argument, Cell offset)
       	        error("Device %02o: %s", device, strerror(errno));
 	}
     }
+    devices[device].position = get_file_position(device);
 }
 
 static void tape_in(unsigned device, Cell argument, Address buffer)
 {
     read_block(device, buffer);
+    devices[device].position = get_file_position(device);
 }
 
 static void tape_out(unsigned device, Cell argument, Address buffer)
 {
     write_block(device, buffer);
+    devices[device].position = get_file_position(device);
 }
 
 /* --- Disks --- */

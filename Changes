@@ -1,3 +1,6 @@
+180124AP
+        - io.c: tape IOC time calculation
+
 180123AP
         - mixref.pdf: octal codes
         - io.c: low end Burroughs B5500 peripheral timing
