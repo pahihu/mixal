@@ -15,6 +15,6 @@ Changes:
   * limited size of drum and tape devices
 
 **NOTE**: execution trace and memory dump mechanics loosely 
-follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971
+follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. Good luck!
 
 
