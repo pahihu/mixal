@@ -4,8 +4,6 @@
 
 #include "mix.h"
 
-extern Cell memory[];
-
 void set_initial_state(void);
 void set_trace_count(unsigned value);
 void print_CPU_state(void);

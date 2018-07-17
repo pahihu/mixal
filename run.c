@@ -40,6 +40,8 @@ static Cell r[10];      /* the registers; except that r[9] == zero. */
 static int comparison_indicator;    /* the overflow toggle is defined in cell.c */
 static Address pc;                  /* the program counter */
 static State internal_state;        /* MIX internal state  */
+static int rtc_busy;		    /* real-time clock active */
+static Flag rtc_int_pending;	    /* real-time clock interrupt pending */
 
 void set_trace_count(unsigned value)
 {
@@ -53,6 +55,8 @@ void set_initial_state(void)
     overflow = false;
     comparison_indicator = 0;
     internal_state = io_has_interrupt_facility() ? control_state : normal_state;
+    rtc_busy = 0;
+    rtc_int_pending = false;
     {
 	unsigned i;
 	for (i = 0; i < 10; ++i)
@@ -83,46 +87,46 @@ void increment_frequency(Address address)
 
 void save_state(void)
 {
-    Cell status;
-    Byte ov_ci;
+    Cell psw;
+    Byte flags;
     int i;
 
-    memory_store(-9, r[A]);
-    memory_store(-8, r[X]);
+    control_memory[9] = r[A];
+    control_memory[8] = r[X];
     for (i = 1; i < 7; i++)
-        memory_store(-(8 - i), r[i]);
+        control_memory[8 - i] = r[i];
 
-    ov_ci = 0;
+    flags = 0;
     if (overflow)
-        ov_ci += 8;
-    ov_ci += 1 + SIGN(comparison_indicator);
+        flags += 8;
+    flags += 1 + SIGN(comparison_indicator);
 
-    status = set_field(r[J], make_field_spec(4, 5), zero);
-    status = set_byte(ov_ci, 3, status);
-    status = set_field(address_to_cell(pc), make_field_spec(1, 2), status);
+    psw = set_field(r[J], make_field_spec(4, 5), zero);
+    psw = set_byte(flags, 3, psw);
+    psw = set_field(address_to_cell(pc), make_field_spec(1, 2), psw);
 
-    memory_store(-1, status);
+    control_memory[1] = psw;
 }
 
 void restore_state(void)
 {
-    Cell status;
-    Byte ov_ci;
+    Cell psw;
+    Byte flags;
     int i;
 
-    r[A] = memory_fetch( -9 );
-    r[X] = memory_fetch( -8 );
+    r[A] = control_memory[9];
+    r[X] = control_memory[8];
     for (i = 1; i < 7; i++)
-        r[i] = memory_fetch( -(8 - i) );
+        r[i] = control_memory[8 - i];
     
-    status = memory_fetch( -1 );
-    r[J]   = field(make_field_spec(4, 5), status);
-    pc     = cell_to_address(field(make_field_spec(1, 2), status));
+    psw  = control_memory[1];
+    r[J] = field(make_field_spec(4, 5), psw);
+    pc   = cell_to_address(field(make_field_spec(1, 2), psw));
 
-    ov_ci  = get_byte(3, status);
-    overflow = ov_ci > 7 ? true : false;
-    ov_ci &= 7;
-    comparison_indicator = (int) ov_ci - 1;
+    flags  = get_byte(3, psw);
+    overflow = flags > 7 ? true : false;
+    flags &= 7;
+    comparison_indicator = (int) flags - 1;
 }
 
 void print_CPU_state(void)
@@ -151,26 +155,40 @@ void print_CPU_state(void)
 
 Cell memory_fetch(Address address)
 {
-    if (address < 0 && normal_state == internal_state)
-        error("Cannot access control store in normal state");
+    Cell cell;
 
     if (memory_size <= abs(address))
         error("Address out of range");
 
-    return address < 0 ? control_memory[-address] : memory[address];
+    if (address < 0) {
+	if (false == io_has_interrupt_facility())
+	    error("No interrupt facility installed");
+        if (normal_state == internal_state)
+            error("Cannot access control store in normal state");
+
+        cell = control_memory[-address];
+    }
+    else
+        cell = memory[address];
+
+    return cell;
 }
 
 void memory_store(Address address, Cell cell)
 {
-    if (address < 0 && normal_state == internal_state)
-        error("Cannot access control store in normal state");
-
     if (memory_size <= abs(address))
         error("Address out of range");
 
-    if (address < 0)
+    if (address < 0) {
+	if (false == io_has_interrupt_facility())
+	    error("No interrupt facility installed");
+        if (normal_state == internal_state)
+            error("Cannot access control store in normal state");
+
         memory[-address] = cell;
-    else
+        if (-10 == address)
+            rtc_busy = 1000;
+    } else
         memory[address] = cell;
 }
 
@@ -282,8 +300,8 @@ static void do_special(void)
 	    longjmp(escape_k, 1);
             break;
         case 7: /* INT */
-            if (io_has_interrupt_facility() == false)
-                error("No interrupt facility present");
+            if (false == io_has_interrupt_facility())
+                error("No interrupt facility installed");
             if (normal_state == internal_state) {
                 save_state();
 		internal_state = control_state;
@@ -293,6 +311,7 @@ static void do_special(void)
 		internal_state = normal_state;
 		rti_done = true;
             }
+	    elapsed_time++;
             break;
 	default: error("Unknown extended opcode");
     }
@@ -577,14 +596,14 @@ void print_CPU_trace(Flag header)
 
 void run(void)
 {
-    Byte go_device = 255;
+    Byte go_device = DEVICE_INVALID;
 
     install_error_handler(stop);
     if (setjmp(escape_k) != 0)
 	return;
 
     go_device = io_go_device();
-    if (go_device != 255) {
+    if (DEVICE_INVALID != go_device) {
         M = 0; F = go_device; C = 36;
         op_table[C].action();
         pc = 0;
@@ -598,7 +617,7 @@ void run(void)
     	    error("Program counter out of range: %4o", pc);
     	{
     	    Byte I, device;
-    	    unsigned long start_time;
+    	    unsigned long start_time, delta_time;
 
     	    if (trace_count && (frequency[pc] <= trace_count))
     	        print_CPU_trace(false);
@@ -614,16 +633,42 @@ void run(void)
     	    op_table[C].action();
     	    elapsed_time += op_table[C].clocks;
 
+	    delta_time = elapsed_time - start_time;
             if (!io_done && io_scheduled())
-                do_scheduled_io(elapsed_time - start_time);
+                do_scheduled_io(delta_time);
+
+	    if (rtc_busy) {
+		if (rtc_busy <= delta_time) {
+                    Cell cell = sub(control_memory[10], ulong_to_cell(1));
+		    control_memory[10] = cell;
+		    if (magnitude(cell)) {
+		        if (delta_time > 1000 + rtc_busy)
+		            delta_time = delta_time % 1000;
+		        rtc_busy = 1000 + rtc_busy - delta_time;
+		    } else {
+			rtc_busy = 0;
+                        rtc_int_pending = true;
+		    }
+		} else
+		    rtc_busy -= delta_time;
+            }
 
 	    if (!rti_done && 
-                normal_state == internal_state &&
-                io_pending_interrupt(&device))
+                normal_state == internal_state)
             {
-                save_state();
-		internal_state = control_state;
-		pc = -(20 + device);
+		Address int_pc = 0;
+		if (true == rtc_int_pending) {
+                    rtc_int_pending = false;
+                    int_pc = -11;
+		}
+                else if (true == io_pending_interrupt(&device)) {
+		    int_pc = -(20 + device);
+                }
+                if (int_pc) {
+                    save_state();
+                    internal_state = control_state;
+                    pc = int_pc;
+                }
             }
     	}
     }

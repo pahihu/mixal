@@ -12,7 +12,7 @@
 static int dbg = 0;		            /* debug flag */
 
 static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
-static Byte go_device = 255;                /* no default GO device */
+static Byte go_device = DEVICE_INVALID;     /* no default GO device */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
@@ -725,7 +725,7 @@ Flag io_pending_interrupt(Byte *int_device)
     unsigned next_int_pending;
 
     next_int_pending = (unsigned) -1;
-    next_device      = 255;
+    next_device      = DEVICE_INVALID;
     for (device = 0; device < num_devices; device++) {
         if (devices[device].busy || devices[device].int_pending == 0)
             continue;
@@ -734,7 +734,7 @@ Flag io_pending_interrupt(Byte *int_device)
             next_device = device;
         }
     }
-    if (255 != next_device) {
+    if (DEVICE_INVALID != next_device) {
         devices[device].int_request = false;
         devices[device].int_pending = 0;
         *int_device = next_device;
