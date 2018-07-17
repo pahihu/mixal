@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int dbg = 0;		            /* debug flag */
+
 static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
 static Byte go_device = 255;                /* no default GO device */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
@@ -123,7 +125,7 @@ static void ensure_open(Byte device)
 {
     if (num_devices <= device)
         error("Unknown device - %02o", device);
-    if (!assigned_file(device)){
+    if (!assigned_file(device)) {
 	if (attributes(device)->base_filename) {
 	    const char *filename = device_filename(device);
 	    if (!(devices[device].file = fopen(filename, "r+b"))
@@ -138,11 +140,17 @@ static void ensure_open(Byte device)
 static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
 {
     int i;
+
+    if (dbg)
+        fprintf(stderr, "io_mark_incomplete(%d,%d,%d)\n", buffer, block_size, mark);
     for (i = 0; i < block_size; i++) {
         if (memory_size <= buffer + i)
             error("Address out of range -- io_mark_incomplete");
-        if (incomplete[buffer + i] + mark < 0)
+        if (incomplete[buffer + i] + mark < 0) {
+            if (dbg)
+                fprintf(stderr, "current: %d, mark: %d\n", incomplete[buffer + i], mark);
             error("Overlapping buffers -- io_mark_incomplete");
+        }
         incomplete[buffer + i] += mark;
     }
 }
@@ -153,6 +161,9 @@ static void io_schedule(Byte device, Operation operation,
     unsigned busy, seek_time, u;
     enum DeviceType device_type;
     long position;
+
+    if (dbg)
+        fprintf(stderr,"io_schedule(%d, %d, %ld, %ld, %d)\n", device, operation, argument, offset, buffer);
 
     devices[device].operation = operation;
     devices[device].argument  = argument;
@@ -190,7 +201,7 @@ static void io_schedule(Byte device, Operation operation,
         busy *= seek_time;
     }
     else {
-        if ((device_type != console) && (operation != input))
+        if ((device_type != console) || (operation != input))
             busy = attributes(device)->io_time;
     }
 
@@ -201,6 +212,8 @@ static void io_schedule(Byte device, Operation operation,
                            attributes(device)->block_size,
                            operation == input ? WRITE : READ);
     }
+    if (dbg)
+        fprintf(stderr,"io_schedule: busy = %d\n", busy);
     devices[device].busy = busy;
 
     if (next_scheduled_io) {
@@ -220,6 +233,9 @@ static void do_io(Byte device)
     argument  = devices[device].argument;
     offset    = devices[device].offset;
     buffer    = devices[device].buffer;
+
+    if (dbg)
+        fprintf(stderr,"do_io: device=%d operation=%d argument=%ld offset=%ld buffer=%d\n", device, operation, argument, offset, buffer);
 
     ensure_open(device);
     current_device_type = devices[device].type;
@@ -581,6 +597,8 @@ void do_scheduled_io(unsigned clocks)
     int i;
     Byte device;
 
+    if (dbg)
+        fprintf(stderr,"do_scheduled_io(%d)\n", clocks);
     for (i = 0; i < clocks; i++) {
         next_scheduled_io = (unsigned) -1;
         for (device = 0; device < num_devices; device++) {

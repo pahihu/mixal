@@ -328,7 +328,7 @@ static void do_jred(void)
 }
 
 static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); io_done = true; }
-static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)) ; io_done = true; }
+static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)); io_done = true; }
 static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); io_done = true; }
 
 static void do_addr_op(void)
