@@ -13,6 +13,7 @@ Changes:
   * instruction execution trace
   * memory dump of non-zero locations, with instruction frequency counts
   * limited size of drum and tape devices
+  * interrupt facility (incomplete, untested)
 
 **NOTE**: execution trace and memory dump mechanics loosely 
 follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. Good luck!
