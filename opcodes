@@ -24,6 +24,7 @@ div	04
 num	05	0	x
 char	05	1	x
 hlt	05	2	x
+int     05      7       x
 sla	06	0	x
 sra	06	1	x
 slax	06	2	x

@@ -121,7 +121,7 @@ static void assemble_file(const char *filename)
 
 static void usage()
 {
-    fprintf(stderr, "usage: mixal [-d(ump)] [-g(o) device] [-h(elp)] [-r(edirect reader/punch/printer)] [-t(trace) n]\n");
+    fprintf(stderr, "usage: mixal [-d(ump)] [-g(o) device] [-h(elp)] [-i(nterrupt facility)] [-r(edirect reader/punch/printer)] [-t(trace) n]\n");
     exit(1);
 }
 
@@ -147,6 +147,8 @@ int main(int argc, char **argv)
                     io_set_go_device(atol(argv[i])); break;
                 case 'h':
                     usage(); break;
+		case 'i':
+		    io_has_interrupt_facility(); break;
                 case 'r':
                     io_redirect(); break;
                 case 't':

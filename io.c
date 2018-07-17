@@ -16,6 +16,9 @@ static Byte go_device = 255;                /* no default GO device */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
+int control_incomplete[memory_size];        /* mark cell used by I/O */
+static Flag interrupt_facility = false;	    /* interrupt facility not present */
+static unsigned int_sequence = 0;	    /* interrupt sequence counter */
 #define READ    (-1)
 #define WRITE   (-((int) num_devices + 1))
 
@@ -35,6 +38,8 @@ static struct {
     Cell argument;
     Cell offset;
     Address buffer; 
+    Flag int_request;		/* request interrupt on completion */
+    Flag int_pending;		/* interrupt pending */
 } devices[] = {
     {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, 
     {disk}, {disk}, {disk}, {disk}, {disk}, {disk}, {drum}, {drum}, 
@@ -137,21 +142,40 @@ static void ensure_open(Byte device)
     }
 }
 
+static int fetch_incomplete(Address address)
+{
+    return address < 0 ? control_incomplete[-address] : incomplete[address];
+}
+
+static void store_incomplete(Address address, int value)
+{
+    if (address < 0)
+        control_incomplete[-address] = value;
+    else
+        incomplete[address] = value;
+}
+
 static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
 {
-    int i;
+    int i, current_count;
+
+    if (buffer < 0) {
+        if (normal_state == get_internal_state())
+            error("Cannot access control store in normal state");
+    }
 
     if (dbg)
         fprintf(stderr, "io_mark_incomplete(%d,%d,%d)\n", buffer, block_size, mark);
     for (i = 0; i < block_size; i++) {
-        if (memory_size <= buffer + i)
+        if (memory_size <= magnitude(buffer + i))
             error("Address out of range -- io_mark_incomplete");
-        if (incomplete[buffer + i] + mark < 0) {
+        current_count = fetch_incomplete(buffer + i);
+        if (current_count + mark < 0) {
             if (dbg)
-                fprintf(stderr, "current: %d, mark: %d\n", incomplete[buffer + i], mark);
+                fprintf(stderr, "current: %d, mark: %d\n", current_count, mark);
             error("Overlapping buffers -- io_mark_incomplete");
         }
-        incomplete[buffer + i] += mark;
+        store_incomplete(buffer + i, current_count + mark);
     }
 }
 
@@ -255,6 +279,9 @@ static void do_io(Byte device)
                            attributes(device)->block_size, 
                            operation == input ? -WRITE : -READ);
         
+    if (devices[device].int_request == true)
+        devices[device].int_pending = ++int_sequence;
+
     devices[device].busy = 0;
 }
 
@@ -263,11 +290,17 @@ static unsigned do_operation(Byte device, Operation operation,
 {
     unsigned clocks = 0;
 
+    if (devices[device].int_pending)
+        error("Interrupt pending - %02o", device);
+
     if (devices[device].busy) {
         clocks = devices[device].busy;
         idle_time += clocks;
         do_scheduled_io(clocks);
     }
+
+    if (control_state == get_internal_state())
+        devices[device].int_request = true;
 
     if (attributes(device)->io_time)
         io_schedule(device, operation, argument, offset, buffer); 
@@ -278,6 +311,8 @@ static unsigned do_operation(Byte device, Operation operation,
         case input:   attributes(device)->in_handler(device, argument, buffer); break;
         case output:  attributes(device)->out_handler(device, argument, buffer); break;
         }
+        if (devices[device].int_request == true)
+            devices[device].int_pending = ++int_sequence;
     }
     return clocks;
 }
@@ -630,10 +665,15 @@ Flag io_scheduled(void)
 void io_init(void)
 {
     Byte i;
-    for (i = 0; i < num_devices; i++)
+    for (i = 0; i < num_devices; i++) {
         devices[i].busy = 0;
-    for (i = 0; i < memory_size; i++)
+        devices[i].int_request = false;
+        devices[i].int_pending = false;
+    }
+    for (i = 0; i < memory_size; i++) {
         incomplete[i] = -WRITE;
+        control_incomplete[i] = -WRITE;
+    }
 }
 
 unsigned io_finish(void)
@@ -654,10 +694,10 @@ Flag io_incomplete(Address address, Access access)
     Flag ret = false;
     int count;
     
-    if (memory_size <= address)
+    if (memory_size <= magnitude(address))
         error("Address out of range -- io_incomplete");
         
-    count = incomplete[address];
+    count = fetch_incomplete(address);
     if (count == -WRITE)                    /* it is free */
         ret = false;
     else if (access == write_access)        /* either written to, or read from , therefore not writable */
@@ -666,3 +706,41 @@ Flag io_incomplete(Address address, Access access)
         ret = count ? true : false;
     return ret;
 }
+
+/* --- I/O interrupt support --- */
+
+void io_set_interrupt_facility(void)
+{
+    interrupt_facility = true;
+}
+
+Flag io_has_interrupt_facility(void)
+{
+    return interrupt_facility;
+}
+
+Flag io_pending_interrupt(Byte *int_device)
+{
+    Byte device, next_device;
+    unsigned next_int_pending;
+
+    next_int_pending = (unsigned) -1;
+    next_device      = 255;
+    for (device = 0; device < num_devices; device++) {
+        if (devices[device].busy || devices[device].int_pending == 0)
+            continue;
+        if (devices[device].int_pending < next_int_pending) {
+            next_int_pending = devices[device].int_pending;
+            next_device = device;
+        }
+    }
+    if (255 != next_device) {
+        devices[device].int_request = false;
+        devices[device].int_pending = 0;
+        *int_device = next_device;
+        return true;
+    }
+    return false;
+}
+
+

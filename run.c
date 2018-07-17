@@ -27,7 +27,9 @@ static unsigned long elapsed_time = 0;      /* in Tyme units */
 /* --- The CPU state --- */
 
 Cell memory[memory_size];
+Cell control_memory[memory_size];	    /* control store    */
 unsigned frequency[memory_size];            /* frequency counts */
+unsigned control_frequency[memory_size];    /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
 
 #define A 0
@@ -36,7 +38,8 @@ unsigned trace_count = 0;                   /* do not trace instructions */
 static Cell r[10];      /* the registers; except that r[9] == zero. */
 
 static int comparison_indicator;    /* the overflow toggle is defined in cell.c */
-static Address pc;      /* the program counter */
+static Address pc;                  /* the program counter */
+static State internal_state;        /* MIX internal state  */
 
 void set_trace_count(unsigned value)
 {
@@ -49,12 +52,77 @@ void set_initial_state(void)
 
     overflow = false;
     comparison_indicator = 0;
+    internal_state = io_has_interrupt_facility() ? control_state : normal_state;
     {
 	unsigned i;
 	for (i = 0; i < 10; ++i)
 	    r[i] = zero;
     }
     pc = entry_point;       /*** need to check for no entry point */
+}
+
+State get_internal_state(void)
+{
+    return internal_state;
+}
+
+unsigned fetch_frequency(Address address)
+{
+    return address < 0 ? control_frequency[-address] : frequency[address];
+}
+
+void increment_frequency(Address address)
+{
+    if (address < 0)
+        control_frequency[-address]++;
+    else
+        frequency[address]++;
+}
+
+#define SIGN(x)		((x) < 0 ? -1 : (x) > 0 ? 1 : 0)
+
+void save_state(void)
+{
+    Cell status;
+    Byte ov_ci;
+    int i;
+
+    memory_store(-9, r[A]);
+    memory_store(-8, r[X]);
+    for (i = 1; i < 7; i++)
+        memory_store(-(8 - i), r[i]);
+
+    ov_ci = 0;
+    if (overflow)
+        ov_ci += 8;
+    ov_ci += 1 + SIGN(comparison_indicator);
+
+    status = set_field(r[J], make_field_spec(4, 5), zero);
+    status = set_byte(ov_ci, 3, status);
+    status = set_field(address_to_cell(pc), make_field_spec(1, 2), status);
+
+    memory_store(-1, status);
+}
+
+void restore_state(void)
+{
+    Cell status;
+    Byte ov_ci;
+    int i;
+
+    r[A] = memory_fetch( -9 );
+    r[X] = memory_fetch( -8 );
+    for (i = 1; i < 7; i++)
+        r[i] = memory_fetch( -(8 - i) );
+    
+    status = memory_fetch( -1 );
+    r[J]   = field(make_field_spec(4, 5), status);
+    pc     = cell_to_address(field(make_field_spec(1, 2), status));
+
+    ov_ci  = get_byte(3, status);
+    overflow = ov_ci > 7 ? true : false;
+    ov_ci &= 7;
+    comparison_indicator = (int) ov_ci - 1;
 }
 
 void print_CPU_state(void)
@@ -74,7 +142,7 @@ void print_CPU_state(void)
     printf ("  PC: %04o", pc);
     printf ("  Flags: %-7s %-8s",
 	    comparison_indicator < 0 ? "less" :
-	      comparison_indicator == 0 ? "equal" : "greater",
+	        comparison_indicator == 0 ? "equal" : "greater",
 	    overflow ? "overflow" : "");
     printf (" %11lu elapsed (%lu idle)\n", elapsed_time, idle_time);
 }
@@ -83,16 +151,27 @@ void print_CPU_state(void)
 
 Cell memory_fetch(Address address)
 {
-	if (memory_size <= address)
-	    error("Address out of range");
-    return memory[address];
+    if (address < 0 && normal_state == internal_state)
+        error("Cannot access control store in normal state");
+
+    if (memory_size <= abs(address))
+        error("Address out of range");
+
+    return address < 0 ? control_memory[-address] : memory[address];
 }
 
 void memory_store(Address address, Cell cell)
 {
-    if (memory_size <= address)
-	    error("Address out of range");
-	memory[address] = cell;
+    if (address < 0 && normal_state == internal_state)
+        error("Cannot access control store in normal state");
+
+    if (memory_size <= abs(address))
+        error("Address out of range");
+
+    if (address < 0)
+        memory[-address] = cell;
+    else
+        memory[address] = cell;
 }
 
 /* --- I/O protected memory access */
@@ -122,6 +201,7 @@ static Byte C;
 static Byte F;
 static Cell M;
 static Flag io_done;
+static Flag rti_done;
 
 void print_DUMP(void)
 {
@@ -200,6 +280,19 @@ static void do_special(void)
 	case 2: /* HLT */
             elapsed_time += io_finish();
 	    longjmp(escape_k, 1);
+            break;
+        case 7: /* INT */
+            if (io_has_interrupt_facility() == false)
+                error("No interrupt facility present");
+            if (normal_state == internal_state) {
+                save_state();
+		internal_state = control_state;
+                pc = -12;
+            } else {
+                restore_state();
+		internal_state = normal_state;
+		rti_done = true;
+            }
             break;
 	default: error("Unknown extended opcode");
     }
@@ -368,7 +461,7 @@ static const struct {
     { do_sub, 2, "SUB" },
     { do_mul, 10, "MUL" },
     { do_div, 12, "DIV" },
-    { do_special, 1, "*NUM CHARHLT " },
+    { do_special, 1, "*NUM CHARHLT SPEC3SPEC4SPEC5SPEC6INT " },
     { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC " },
     { do_move, 1, "MOV" },
 
@@ -462,7 +555,7 @@ void print_CPU_trace(Flag header)
 
     instruction = safe_fetch(pc);
     destructure_cell(instruction, M, I, F, C);
-    printf ("%04o %04d ", pc, frequency[pc]);
+    printf ("%04o %04d ", pc, fetch_frequency(pc));
     print_cell (instruction);
     printf (" %-4s ", mnemonic (C, F));
     print_cell (M);
@@ -473,13 +566,12 @@ void print_CPU_trace(Flag header)
     {
         unsigned i;
         for (i = 1; i <= 6; ++i)
-	        printf (" %s%04lo",
-		                is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+	    printf (" %s%04lo", is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf (" +%04lo", magnitude (r[J]));
     printf (" %s %s ", overflow ? "X" : " ",
                        comparison_indicator < 0 ? "L" :
-                            comparison_indicator == 0 ? "E" : "G");
+                           comparison_indicator == 0 ? "E" : "G");
     printf (" %08lu\n", elapsed_time);
 }
 
@@ -502,10 +594,10 @@ void run(void)
         print_CPU_trace(true);
     for (;;) {
 /*      print_CPU_state(); */
-    	if (memory_size <= pc)
+    	if (memory_size <= abs(pc))
     	    error("Program counter out of range: %4o", pc);
     	{
-    	    Byte I;
+    	    Byte I, device;
     	    unsigned long start_time;
 
     	    if (trace_count && (frequency[pc] <= trace_count))
@@ -517,12 +609,22 @@ void run(void)
     	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
     	    /* MOV adds 2 clocks per word */
     	    start_time = elapsed_time;
-            io_done = false;
-    	    frequency[pc]++; pc++;
+            io_done = false; rti_done = false;
+            increment_frequency(pc); pc++;
     	    op_table[C].action();
     	    elapsed_time += op_table[C].clocks;
+
             if (!io_done && io_scheduled())
                 do_scheduled_io(elapsed_time - start_time);
+
+	    if (!rti_done && 
+                normal_state == internal_state &&
+                io_pending_interrupt(&device))
+            {
+                save_state();
+		internal_state = control_state;
+		pc = -(20 + device);
+            }
     	}
     }
 }

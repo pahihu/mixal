@@ -93,7 +93,7 @@ void print_cell(Cell cell);
 void unparse_cell(char *buffer, Cell cell); /* Pre: 12 <= sizeof(buffer) */
 
 /* --- Addresses --- */
-typedef unsigned Address;
+typedef int Address;
 
 Cell address_to_cell(Address addr);
 Address cell_to_address(Cell cell);
