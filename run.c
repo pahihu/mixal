@@ -247,10 +247,42 @@ static Cell get_V(void)
 
 static void do_nop(void)    { }
 
-static void do_add(void)    { r[A] = add(r[A], get_V()); }
-static void do_sub(void)    { r[A] = sub(r[A], get_V()); }
+static void do_add(void)
+{
+    Cell v = get_V();
 
-static void do_mul(void)    { multiply(r[A], get_V(), &r[A], &r[X]); }
+    if (7 == F)
+	r[A] = logical_sum(r[A], v);
+    else if (F)
+	error("Unknown extended opcode");
+    else
+        r[A] = add(r[A], v);
+}
+
+static void do_sub(void)
+{
+    Cell v = get_V();
+
+    if (7 == F)
+        r[A] = logical_difference(r[A], v);
+    else if (F)
+	error("Unknown extended opcode");
+    else
+        r[A] = sub(r[A], v);
+}
+
+static void do_mul(void)
+{
+    Cell v = get_V();
+
+    if (7 == F)
+       r[A] = logical_product(r[A], v);
+    else if (F)
+	error("Unknown extended opcode");
+    else
+        multiply(r[A], v, &r[A], &r[X]);
+}
+
 static void do_div(void)    { divide(r[A], r[X], get_V(), &r[A], &r[X]); }
 
 static void do_special(void)
@@ -281,7 +313,7 @@ static void do_special(void)
             elapsed_time += io_finish();
 	    longjmp(escape_k, 1);
             break;
-        case 7: /* INT */
+        case 7: { /* INT */
             if (io_has_interrupt_facility() == false)
                 error("No interrupt facility present");
             if (normal_state == internal_state) {
@@ -294,6 +326,17 @@ static void do_special(void)
 		rti_done = true;
             }
             break;
+	}
+	case 8: { /* NEG */
+	    unsigned long cell = ~magnitude(r[A]);
+	    r[A] = is_negative(r[A]) ? negative(cell) : cell;
+	    break;
+	}
+	case 9: { /* XCH */
+	    Cell cell = r[A];
+	    r[A] = r[X]; r[X] = cell;
+	    break;
+	}
 	default: error("Unknown extended opcode");
     }
 }
@@ -323,6 +366,14 @@ static void do_shift(void)
 	case 5: { /* SRC */
 	    unsigned c = (10 - count % 10) % 10;    /* -count modulo 10 */
 	    shift_left_circular(r[A], r[X], c, &r[A], &r[X]);
+	    break;
+	}
+	case 6: { /* SLB */
+	    shift_left_binary(r[A], r[X], count, &r[A], &r[X]);
+	    break;
+	}
+	case 7: { /* SRB */
+	    shift_right_binary(r[A], r[X], count, &r[A], &r[X]);
 	    break;
 	}
 	default: error("Unknown extended opcode");
@@ -375,26 +426,28 @@ static void jump(void)
     pc = cell_to_address(M);
 }
 
-static void branch(unsigned condition, int sign)
+static void branch(unsigned condition, int sign, Cell cell)
 {
     switch (condition) {
-	case 0: jump(); break;
-	case 1: pc = cell_to_address(M); break;
-	case 2: if (overflow)  jump(); overflow = false; break;
-	case 3: if (!overflow) jump(); overflow = false; break;
-	case 4: if (sign <  0) jump(); break;
-	case 5: if (sign == 0) jump(); break;
-	case 6: if (sign  > 0) jump(); break;
-	case 7: if (sign >= 0) jump(); break;
-	case 8: if (sign != 0) jump(); break;
-	case 9: if (sign <= 0) jump(); break;
+	case  0: jump(); break;
+	case  1: pc = cell_to_address(M); break;
+	case  2: if (overflow)  jump(); overflow = false; break;
+	case  3: if (!overflow) jump(); overflow = false; break;
+	case  4: if (sign <  0) jump(); break;
+	case  5: if (sign == 0) jump(); break;
+	case  6: if (sign  > 0) jump(); break;
+	case  7: if (sign >= 0) jump(); break;
+	case  8: if (sign != 0) jump(); break;
+	case  9: if (sign <= 0) jump(); break;
+        case 10: if (0 == (magnitude(cell) & 2)) jump(); break;
+        case 11: if (1 == (magnitude(cell) & 2)) jump(); break;
 	default: error("Bad branch condition");
     }
 }
 
 static void do_jump(void)
 {
-    branch(F, comparison_indicator);
+    branch(F, comparison_indicator, zero);
 }
 
 static int sign_of_difference(Cell difference)
@@ -404,7 +457,10 @@ static int sign_of_difference(Cell difference)
 
 static void do_reg_branch(void)
 {
-    branch(F + 4, sign_of_difference(r[C & 7]));
+    Cell cell;
+
+    cell = r[C & 7];
+    branch(F + 4, sign_of_difference(cell), cell);
 }
 
 static void do_jbus(void)
@@ -457,12 +513,12 @@ static const struct {
     const char *mnemonic;
 } op_table[64] = {
     { do_nop, 1, "NOP" },
-    { do_add, 2, "ADD" },
-    { do_sub, 2, "SUB" },
-    { do_mul, 10, "MUL" },
+    { do_add, 2, "*ADD U11 U12 U13 U14 U15 U16 OR  " },
+    { do_sub, 2, "*SUB U21 U22 U23 U24 U25 U26 XOR " },
+    { do_mul, 10, "*MUL U31 U32 U33 U34 U35 U36 AND " },
     { do_div, 12, "DIV" },
-    { do_special, 1, "*NUM CHARHLT SPEC3SPEC4SPEC5SPEC6INT " },
-    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC " },
+    { do_special, 1, "*NUM CHARHLT U53 U54 U55 U56 INT NEG XCH " },
+    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC SLB SRB " },
     { do_move, 1, "MOV" },
 
     { do_lda, 2, "LDA" },
@@ -501,14 +557,14 @@ static const struct {
     { do_jred, 1, "JRED" },
     { do_jump, 1, "*JMP JSJ JOV JNOVJL  JE  JG  JGE JNE JLE " },
 
-    { do_reg_branch, 1, "*JAN JAZ JAP JANNJANZJANP" },
-    { do_reg_branch, 1, "*J1N J1Z J1P J1NNJ1NZJ1NP" },
-    { do_reg_branch, 1, "*J2N J2Z J2P J2NNJ2NZJ2NP" },
-    { do_reg_branch, 1, "*J3N J3Z J3P J3NNJ3NZJ3NP" },
-    { do_reg_branch, 1, "*J4N J4Z J4P J4NNJ4NZJ4NP" },
-    { do_reg_branch, 1, "*J5N J5Z J5P J5NNJ5NZJ5NP" },
-    { do_reg_branch, 1, "*J6N J6Z J6P J6NNJ6NZJ6NP" },
-    { do_reg_branch, 1, "*JXN JXZ JXP JXNNJXNZJXNP" },
+    { do_reg_branch, 1, "*JAN JAZ JAP JANNJANZJANPJAE JAO " },
+    { do_reg_branch, 1, "*J1N J1Z J1P J1NNJ1NZJ1NPJ1E J1O " },
+    { do_reg_branch, 1, "*J2N J2Z J2P J2NNJ2NZJ2NPJ2E J2O" },
+    { do_reg_branch, 1, "*J3N J3Z J3P J3NNJ3NZJ3NPJ3E J3O" },
+    { do_reg_branch, 1, "*J4N J4Z J4P J4NNJ4NZJ4NPJ4E J4O" },
+    { do_reg_branch, 1, "*J5N J5Z J5P J5NNJ5NZJ5NPJ5E J5O" },
+    { do_reg_branch, 1, "*J6N J6Z J6P J6NNJ6NZJ6NPJ6E J6O" },
+    { do_reg_branch, 1, "*JXN JXZ JXP JXNNJXNZJXNPJXE JXO" },
 
     { do_addr_op, 1, "*INCADECAENTAENNA" },
     { do_addr_op, 1, "*INC1DEC1ENT1ENN1" },

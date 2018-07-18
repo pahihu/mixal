@@ -13,9 +13,11 @@ Changes:
   * instruction execution trace
   * memory dump of non-zero locations, with instruction frequency counts
   * limited size of drum and tape devices
-  * interrupt facility (incomplete, untested)
+  * interrupt facility
+  * real-time clock
+  * several UT-MIX extension added (OR, XOR, AND, NEG, XCH, SLB, SRB, JrE, JrO)
 
 **NOTE**: execution trace and memory dump mechanics loosely 
-follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. Good luck!
+follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, Uni. Texas, Jan, 1977. Good luck!
 
 

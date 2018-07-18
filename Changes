@@ -1,3 +1,7 @@
+180718
+	- mixref.pdf: JrE, JrO, NEG, XCH, SLB, SRB, OR, XOR, AND added
+	- opcodes, cell.c, run.c: several UT-MIX extensions added
+
 180717
 	- mixref.pdf: INT instruction added
 	- io.c, main.c, opcodes, run.c: interrupt facility added

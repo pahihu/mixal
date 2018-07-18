@@ -70,12 +70,18 @@ Cell sub(Cell x, Cell y);
 void multiply(Cell x, Cell y, Cell *high_word, Cell *low_word);
 Cell mul(Cell x, Cell y);
 
+Cell logical_sum(Cell x, Cell y);
+Cell logical_difference(Cell x, Cell y);
+Cell logical_product(Cell x, Cell y);
+
 void divide(Cell n1, Cell n0, Cell d, Cell *quotient, Cell *remainder);
 Cell slash(Cell x, Cell y);     /* the name 'div' is taken... */
 
 void shift_left(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
 void shift_right(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
 void shift_left_circular(Cell A, Cell X, unsigned count, Cell *pA, Cell *pX);
+void shift_left_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
+void shift_right_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
 
 /* Break a cell into its component fields. */
 #define destructure_cell(cell, A, I, F, C)  \

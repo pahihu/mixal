@@ -211,6 +211,25 @@ Cell slash(Cell x, Cell y)      /* the name 'div' is taken... */
     return quotient;
 }
 
+/* --- Logical operations --- */
+Cell logical_sum(Cell x, Cell y)
+{
+    unsigned long sum = magnitude(x) | magnitude(y);
+    return sign_bit(x) | sum;
+}
+
+Cell logical_difference(Cell x, Cell y)
+{
+    unsigned long diff = magnitude(x) ^ magnitude(y);
+    return sign_bit(x) | diff;
+}
+
+Cell logical_product(Cell x, Cell y)
+{
+    unsigned long prod = magnitude(x) & magnitude(y);
+    return sign_bit(x) | prod;
+}
+
 /* --- Shift operations --- */
 
 void shift_right(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX)
@@ -237,6 +256,34 @@ void shift_left(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX)
 			& (magnitude(X) >> (30 - 6 * count));
     } else if (count < 10)
 	*pA |= CELL_MAX & (X << (6 * count - 30));
+    else
+	;
+}
+
+void shift_right_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX)
+{
+    *pX = sign_bit(X);
+    *pA = sign_bit(A);
+    if (count < 30) {
+	*pA |= magnitude(A) >> count;
+	*pX |= CELL_MAX & (magnitude(X) >> count)
+			& (A << (30 - count));
+    } else if (count < 60)
+	*pX |= magnitude(A) >> (count - 30);
+    else
+	;
+}
+
+void shift_left_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX)
+{
+    *pX = sign_bit(X);
+    *pA = sign_bit(A);
+    if (count < 30) {
+	*pX |= CELL_MAX & (X << count);
+	*pA |= CELL_MAX & (A << count) 
+			& (magnitude(X) >> (30 - count));
+    } else if (count < 60)
+	*pA |= CELL_MAX & (X << (count - 30));
     else
 	;
 }

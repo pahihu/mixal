@@ -18,19 +18,26 @@
 #-----------------------------
 nop	00	0
 add	01
+or	01	7
 sub	02
+xor	02	7
 mul	03
+and	03	7
 div	04
 num	05	0	x
 char	05	1	x
 hlt	05	2	x
 int     05      7       x
+neg	05	8	x
+xch	05	9	x
 sla	06	0	x
 sra	06	1	x
 slax	06	2	x
 srax	06	3	x
 slc	06	4	x
 src	06	5	x
+slb	06	6	x
+srb	06	7	x
 move	07	1
 ld-	08
 ld-n	16
@@ -58,6 +65,8 @@ j-p	40	2	x
 j-nn	40	3	x
 j-nz	40	4	x
 j-np	40	5	x
+j-e	40	6	x
+j-o	40	7	x
 inc-	48	0	x
 dec-	48	1	x
 ent-	48	2	x
