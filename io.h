@@ -4,6 +4,8 @@
 
 #include "mix.h"
 
+#define DEVICE_INVALID	((Byte) 255)
+
 extern unsigned long idle_time;             /* in Tyme units, waiting for I/O */
 
 void io_init(void);
