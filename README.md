@@ -19,6 +19,6 @@ Changes:
   * UT-MIX indirect addressing
 
 **NOTE**: execution trace and memory dump mechanics loosely 
-follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, Uni. Texas, Jan, 1977. Good luck!
+follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, UT Austin, Jan, 1977. Good luck!
 
 
