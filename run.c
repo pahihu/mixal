@@ -70,12 +70,12 @@ State get_internal_state(void)
     return internal_state;
 }
 
-unsigned fetch_frequency(Address address)
+static unsigned fetch_frequency(Address address)
 {
     return address < 0 ? control_frequency[-address] : frequency[address];
 }
 
-void increment_frequency(Address address)
+static void increment_frequency(Address address)
 {
     if (address < 0)
         control_frequency[-address]++;
@@ -85,7 +85,7 @@ void increment_frequency(Address address)
 
 #define SIGN(x)		((x) < 0 ? -1 : (x) > 0 ? 1 : 0)
 
-void save_state(void)
+static void save_state(void)
 {
     Cell psw;
     Byte flags;
@@ -108,7 +108,7 @@ void save_state(void)
     control_memory[1] = psw;
 }
 
-void restore_state(void)
+static void restore_state(void)
 {
     Cell psw;
     Byte flags;
@@ -129,25 +129,31 @@ void restore_state(void)
     comparison_indicator = (int) flags - 1;
 }
 
+static void print_pc(void)
+{
+    printf("%c%04o", pc < 0 ? '-' : ' ', abs(pc));
+}
+
 void print_CPU_state(void)
 {
     printf ("A:");
     print_cell (r[A]);
     printf ("\t");
-    {				/* Print the index registers: */
+    {						/* Print the index registers: */
         unsigned i;
         for (i = 1; i <= 6; ++i)
-	        printf ("I%u:%s%04lo  ",
-		        i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+	    printf ("I%u:%s%04lo  ",
+	        i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf ("\nX:");
     print_cell (r[X]);
     printf ("\t J: %04lo", magnitude (r[J]));	/* (it's always nonnegative) */
-    printf ("  PC: %04o", pc);
-    printf ("  Flags: %-7s %-8s",
-	    comparison_indicator < 0 ? "less" :
-	        comparison_indicator == 0 ? "equal" : "greater",
-	    overflow ? "overflow" : "");
+    printf ("  PC:"); print_pc();
+    printf ("  Flags: %-7s %-8s %-7s",
+        comparison_indicator < 0 ? "less" :
+	    comparison_indicator == 0 ? "equal" : "greater",
+	overflow ? "overflow" : "",
+        control_state == internal_state ? "control" : "");
     printf (" %11lu elapsed (%lu idle)\n", elapsed_time, idle_time);
 }
 
@@ -623,14 +629,15 @@ void print_CPU_trace(Flag header)
     Cell instruction;
     
     if (header) {
-        printf (" LOC FREQ INSTRUCTION OP    OPERAND   |  REGISTER A  REGISTER X  RI1   RI2   RI3   RI4   RI5   RI6   RJ  OV CI    TYME\n");
-        // printf ("1000 0001 +1234567890 JBUS +1234567890| +1234567890 +1234567890 +0000 +0000 +0000 +0000 +0000 +0000 +1007 X E  00014435\n");
+        printf ("  LOC FREQ INSTRUCTION OP    OPERAND   |  REGISTER A  REGISTER X  RI1   RI2   RI3   RI4   RI5   RI6   RJ   VCS   TYME\n");
+        // printf ("+1000 0001 +1234567890 JBUS +1234567890| +1234567890 +1234567890 +0000 +0000 +0000 +0000 +0000 +0000 +1007 XEC 00014435\n");
         return;
     }
 
     instruction = safe_fetch(pc);
     destructure_cell(instruction, M, I, F, C);
-    printf ("%04o %04d ", pc, fetch_frequency(pc));
+    print_pc();
+    printf (" %04d ", fetch_frequency(pc));
     print_cell (instruction);
     printf (" %-4s ", mnemonic (C, F));
     print_cell (M);
@@ -644,9 +651,9 @@ void print_CPU_trace(Flag header)
 	    printf (" %s%04lo", is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf (" +%04lo", magnitude (r[J]));
-    printf (" %s %s ", overflow ? "X" : " ",
-                       comparison_indicator < 0 ? "L" :
-                           comparison_indicator == 0 ? "E" : "G");
+    printf (" %c%c%c ", " X"[overflow ? 1: 0],
+		       "LEG"[1 + SIGN(comparison_indicator)],
+                        " C"[control_state == internal_state ? 1 : 0]);
     printf (" %08lu\n", elapsed_time);
 }
 
@@ -668,31 +675,51 @@ void run(void)
     if (trace_count)
         print_CPU_trace(true);
     for (;;) {
-/*      print_CPU_state(); */
     	if (memory_size <= abs(pc))
-    	    error("Program counter out of range: %4o", pc);
+    	    error("Program counter out of range: %c%04o", pc < 0 ? '-' : ' ', abs(pc));
     	{
-    	    Byte I, device;
+            Byte I, I1, I2, device;
     	    unsigned long start_time, delta_time;
 
+	    /* --- Instruction trace --- */
     	    if (trace_count && (frequency[pc] <= trace_count))
     	        print_CPU_trace(false);
+
     	    destructure_cell(safe_fetch(pc), M, I, F, C);
-    	    if (6 < I)
-    		    error("Invalid I-field: %u", I);
-    	    if (I != 0)
-    	        M = add(M, r[I]);  /* (the add can't overflow because the numbers are too small) */
     	    /* MOV adds 2 clocks per word */
     	    start_time = elapsed_time;
+
+            /* --- Indirect addressing --- */
+	    I1 = (I >> 3);
+            I2 = I & 7;
+            if (I != 0) {
+                if (I == 077)
+                    error("Invalid I-field: %02o", I);
+
+                /* (the add can't overflow because the numbers are too small) */
+                if (7 == I1) {
+                    M = field(make_field_spec(0, 3), safe_fetch(M));
+                    elapsed_time++;
+                } else if (I1)
+                    M = add(M, r[I1]);
+                if (7 == I2) {
+                    M = field(make_field_spec(0, 3), safe_fetch(M));
+                    elapsed_time++;
+                } else if (I2)
+                    M = add(M, r[I2]);
+	    }
+
             io_done = false; rti_done = false;
             increment_frequency(pc); pc++;
     	    op_table[C].action();
     	    elapsed_time += op_table[C].clocks;
 
+            /* --- I/O subsystem --- */
 	    delta_time = elapsed_time - start_time;
             if (!io_done && io_scheduled())
                 do_scheduled_io(delta_time);
 
+            /* --- Real-time clock --- */
 	    if (rtc_busy) {
 		if (rtc_busy <= delta_time) {
                     Cell cell = sub(control_memory[10], ulong_to_cell(1));
@@ -709,6 +736,7 @@ void run(void)
 		    rtc_busy -= delta_time;
             }
 
+            /* --- Interrupt facility --- */
 	    if (!rti_done && 
                 normal_state == internal_state)
             {

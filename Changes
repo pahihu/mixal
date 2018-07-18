@@ -1,4 +1,5 @@
 180718
+	- run.c: CPU trace, status display fixed, indirect addressing
 	- mixref.pdf: JrE, JrO, NEG, XCH, SLB, SRB, OR, XOR, AND added
 	- opcodes, cell.c, run.c: several UT-MIX extensions added
 

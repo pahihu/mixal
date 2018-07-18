@@ -15,7 +15,8 @@ Changes:
   * limited size of drum and tape devices
   * interrupt facility
   * real-time clock
-  * several UT-MIX extension added (OR, XOR, AND, NEG, XCH, SLB, SRB, JrE, JrO)
+  * UT-MIX instructions added: OR, XOR, AND, NEG, XCH, SLB, SRB, JrE, JrO
+  * UT-MIX indirect addressing
 
 **NOTE**: execution trace and memory dump mechanics loosely 
 follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, Uni. Texas, Jan, 1977. Good luck!
