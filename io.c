@@ -17,7 +17,6 @@ static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
 int control_incomplete[memory_size];        /* mark cell used by I/O */
-static Flag interrupt_facility = false;	    /* interrupt facility not present */
 static unsigned int_sequence = 0;	    /* interrupt sequence counter */
 #define READ    (-1)
 #define WRITE   (-((int) num_devices + 1))
@@ -708,16 +707,6 @@ Flag io_incomplete(Address address, Access access)
 }
 
 /* --- I/O interrupt support --- */
-
-void io_set_interrupt_facility(void)
-{
-    interrupt_facility = true;
-}
-
-Flag io_has_interrupt_facility(void)
-{
-    return interrupt_facility;
-}
 
 Flag io_pending_interrupt(Byte *int_device)
 {

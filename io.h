@@ -22,8 +22,6 @@ typedef enum {read_access, write_access} Access;
 Flag io_incomplete(Address address, Access access); /* true if incomplete I/O operation affects the address */
 unsigned io_finish(void);                   /* wait for outstanding I/O to complete, return time spent */
 
-Flag io_has_interrupt_facility(void);	    /* true if interrupt facility present */
-void io_set_interrupt_facility(void);	    /* interrupt facility is present */
 Flag io_pending_interrupt(Byte *device);    /* true if interrupt pending, device is the unit number */
 
 #endif

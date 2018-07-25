@@ -14,4 +14,11 @@ void memory_store(Address address, Cell cell);      /* store cell at address, ra
 typedef enum{normal_state, control_state} State;
 State get_internal_state(void);			    /* internal machine state */
 
+#define MIXCONFIG_BINARY	(1U)		    /* binary MIX */
+#define MIXCONFIG_INTERRUPT	(2U)		    /* interrupt facility */
+#define MIXCONFIG_FLOAT		(4U)		    /* FP attachment */
+#define MIXCONFIG_CORE		(8U)		    /* core memory */
+#define MIXCONFIG_MASTER	(128U)		    /* Mixmaster */
+void set_mixconfig(unsigned flags);		    /* set MIX configuration */
+
 #endif

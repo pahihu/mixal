@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void xecute(Address address, Flag save_context);
+
 static void stop(const char *message, va_list args)
 {
     fprintf(stderr, "RUNTIME ERROR: ");
@@ -31,6 +33,7 @@ Cell control_memory[memory_size];	    /* control store    */
 unsigned frequency[memory_size];            /* frequency counts */
 unsigned control_frequency[memory_size];    /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
+unsigned mix_config = 0;		    /* MIX configuration */
 
 #define A 0
 #define X 7
@@ -54,7 +57,9 @@ void set_initial_state(void)
 
     overflow = false;
     comparison_indicator = 0;
-    internal_state = io_has_interrupt_facility() ? control_state : normal_state;
+    internal_state = (mix_config & MIXCONFIG_INTERRUPT)
+			? control_state 
+			: normal_state;
     rtc_busy = 0;
     rtc_int_pending = false;
     {
@@ -68,6 +73,31 @@ void set_initial_state(void)
 State get_internal_state(void)
 {
     return internal_state;
+}
+
+void set_mixconfig(unsigned flags)
+{
+    if (MIXCONFIG_MASTER == flags)
+        flags = (unsigned) -1;
+    mix_config |= flags;
+}
+
+static void check_master(void)
+{
+    if (0 == (mix_config & MIXCONFIG_MASTER))
+        error("Not a Mixmaster");
+}
+
+static void check_binary(void)
+{
+    if (0 == (mix_config & MIXCONFIG_BINARY))
+        error("Not a binary MIX");
+}
+
+static void check_interrupt(void)
+{
+    if (0 == (mix_config & MIXCONFIG_INTERRUPT))
+        error("No interrupt facility installed");
 }
 
 static unsigned fetch_frequency(Address address)
@@ -167,8 +197,7 @@ Cell memory_fetch(Address address)
         error("Address out of range");
 
     if (address < 0) {
-	if (false == io_has_interrupt_facility())
-	    error("No interrupt facility installed");
+	check_interrupt();
         if (normal_state == internal_state)
             error("Cannot access control store in normal state");
 
@@ -186,8 +215,7 @@ void memory_store(Address address, Cell cell)
         error("Address out of range");
 
     if (address < 0) {
-	if (false == io_has_interrupt_facility())
-	    error("No interrupt facility installed");
+	check_interrupt();
         if (normal_state == internal_state)
             error("Cannot access control store in normal state");
 
@@ -275,8 +303,10 @@ static void do_add(void)
 {
     Cell v = get_V();
 
-    if (7 == F)
+    if (7 == F) {
+	check_binary();
 	r[A] = logical_sum(r[A], v);
+    }
     else if (F)
 	error("Unknown extended opcode");
     else
@@ -287,8 +317,10 @@ static void do_sub(void)
 {
     Cell v = get_V();
 
-    if (7 == F)
+    if (7 == F) {
+	check_binary();
         r[A] = logical_difference(r[A], v);
+    }
     else if (F)
 	error("Unknown extended opcode");
     else
@@ -299,8 +331,10 @@ static void do_mul(void)
 {
     Cell v = get_V();
 
-    if (7 == F)
+    if (7 == F) {
+       check_binary();
        r[A] = logical_product(r[A], v);
+    }
     else if (F)
 	error("Unknown extended opcode");
     else
@@ -338,8 +372,7 @@ static void do_special(void)
 	    longjmp(escape_k, 1);
             break;
         case 7: { /* INT */
-            if (false == io_has_interrupt_facility())
-                error("No interrupt facility present");
+            check_interrupt();
             if (normal_state == internal_state) {
                 save_state();
 		internal_state = control_state;
@@ -353,14 +386,21 @@ static void do_special(void)
             break;
 	}
 	case 8: { /* NEG */
+	    check_binary();
 	    unsigned long cell = ~magnitude(r[A]);
 	    r[A] = is_negative(r[A]) ? negative(cell) : cell;
 	    break;
 	}
 	case 9: { /* XCH */
+	    check_binary();
 	    Cell cell = r[A];
 	    r[A] = r[X]; r[X] = cell;
 	    break;
+	}
+	case 10: { /* XEQ */
+            check_master();
+            xecute(cell_to_address(M), true);
+            break;
 	}
 	default: error("Unknown extended opcode");
     }
@@ -394,10 +434,12 @@ static void do_shift(void)
 	    break;
 	}
 	case 6: { /* SLB */
+	    check_binary();
 	    shift_left_binary(r[A], r[X], count, &r[A], &r[X]);
 	    break;
 	}
 	case 7: { /* SRB */
+	    check_binary();
 	    shift_right_binary(r[A], r[X], count, &r[A], &r[X]);
 	    break;
 	}
@@ -464,8 +506,8 @@ static void branch(unsigned condition, int sign, Cell cell)
 	case  7: if (sign >= 0) jump(); break;
 	case  8: if (sign != 0) jump(); break;
 	case  9: if (sign <= 0) jump(); break;
-        case 10: if (0 == (magnitude(cell) & 2)) jump(); break;
-        case 11: if (1 == (magnitude(cell) & 2)) jump(); break;
+        case 10: check_binary(); if (0 == (magnitude(cell) & 2)) jump(); break;
+        case 11: check_binary(); if (1 == (magnitude(cell) & 2)) jump(); break;
 	default: error("Bad branch condition");
     }
 }
@@ -505,6 +547,15 @@ static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); io_done = 
 static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)); io_done = true; }
 static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); io_done = true; }
 
+static void compare(Cell cell)
+{
+    Flag saved = overflow;
+    Cell difference = sub(field(F, r[C & 7]), 
+			  field(F, cell));
+    comparison_indicator = sign_of_difference(difference);
+    overflow = saved;
+}
+
 static void do_addr_op(void)
 {
     Cell cell;
@@ -514,6 +565,7 @@ static void do_addr_op(void)
 	case 1: cell = sub(r[reg], M); break;
 	case 2: cell = M; break;
 	case 3: cell = negative(M); break;
+ 	case 4: check_master(); compare(M); return;
 	default: error("Unknown extended opcode"); cell = zero;
     }
     if (reg - 1 < 6)        /* same as: 1 <= reg && reg <= 6 */
@@ -525,11 +577,7 @@ static void do_addr_op(void)
 
 static void do_compare(void)
 {
-    Flag saved = overflow;
-    Cell difference = sub(field(F, r[C & 7]), 
-			  field(F, safe_fetch(cell_to_address(M))));
-    comparison_indicator = sign_of_difference(difference);
-    overflow = saved;
+    compare(safe_fetch(cell_to_address(M)));
 }
 
 static const struct {
@@ -591,14 +639,14 @@ static const struct {
     { do_reg_branch, 1, "*J6N J6Z J6P J6NNJ6NZJ6NPJ6E J6O" },
     { do_reg_branch, 1, "*JXN JXZ JXP JXNNJXNZJXNPJXE JXO" },
 
-    { do_addr_op, 1, "*INCADECAENTAENNA" },
-    { do_addr_op, 1, "*INC1DEC1ENT1ENN1" },
-    { do_addr_op, 1, "*INC2DEC2ENT2ENN2" },
-    { do_addr_op, 1, "*INC3DEC3ENT3ENN3" },
-    { do_addr_op, 1, "*INC4DEC4ENT4ENN4" },
-    { do_addr_op, 1, "*INC5DEC5ENT5ENN5" },
-    { do_addr_op, 1, "*INC6DEC6ENT6ENN6" },
-    { do_addr_op, 1, "*INCXDECXENTXENNX" },
+    { do_addr_op, 1, "*INCADECAENTAENNACPAM" },
+    { do_addr_op, 1, "*INC1DEC1ENT1ENN1CP1M" },
+    { do_addr_op, 1, "*INC2DEC2ENT2ENN2CP2M" },
+    { do_addr_op, 1, "*INC3DEC3ENT3ENN3CP3M" },
+    { do_addr_op, 1, "*INC4DEC4ENT4ENN4CP4M" },
+    { do_addr_op, 1, "*INC5DEC5ENT5ENN5CP5M" },
+    { do_addr_op, 1, "*INC6DEC6ENT6ENN6CP6M" },
+    { do_addr_op, 1, "*INCXDECXENTXENNXCPXM" },
 
     { do_compare, 2, "CMPA" },
     { do_compare, 2, "CMP1" },
@@ -657,6 +705,84 @@ void print_CPU_trace(Flag header)
     printf (" %08lu\n", elapsed_time);
 }
 
+static Cell effective_address(Address location)
+{
+    Byte II, I1, I2, CC, FF;
+    Cell MM;
+
+    Cell E, H;
+    Address L;
+    long N;
+
+    H = zero; L = location; N = 0;
+A2:
+    destructure_cell(safe_fetch(L), MM, II, FF, CC);
+    E = MM;
+    I2 = II &  7;
+    I1 = II >> 3;
+    if (0 < I1 && I1 < 7) E = add(E, r[I1]);
+    if (0 < I2 && I2 < 7) H = add(H, r[I2]);
+    if (I1 == 7 && I2 == 7) {
+        N++; H = zero;
+    }
+/* A3: */
+    if (I1 == 7 || I2 == 7) {
+	elapsed_time++;
+        L = cell_to_address(E); goto A2;
+    }
+    else {
+        E = add(E, H); H = zero;
+    }
+/* A4: */
+    if (N > 0) {
+        L = E; N--; goto A2;
+    }
+
+    return E;
+}
+
+static void xecute(Address address, Flag save_context)
+{
+    Byte I;
+    Byte saved_C;
+    Byte saved_F;
+    Cell saved_M;
+    Address saved_pc;
+
+    if (true == save_context) {
+        saved_C = C;
+        saved_F = F;
+        saved_M = M;
+        saved_pc = pc;
+        pc = address;
+    }
+
+    destructure_cell(safe_fetch(pc), M, I, F, C);
+
+    /* --- Indirect addressing --- */
+    if (I != 0) {
+       if (I < 7)
+           /* (the add can't overflow because the numbers are too small) */
+           M = add(M, r[I]);
+       else {
+           if (0 == (mix_config & MIXCONFIG_MASTER))
+               error("Not a Mixmaster. Invalid I-field: %02o", I);
+           M = effective_address(pc);
+       }
+    }
+
+    io_done = false; rti_done = false;
+    increment_frequency(pc); pc++;
+    op_table[C].action();
+
+    if (save_context) {
+        C  = saved_C;
+        F  = saved_F;
+        M  = saved_M;
+        pc = saved_pc;
+    }
+}
+
 void run(void)
 {
     Byte go_device = DEVICE_INVALID;
@@ -678,40 +804,16 @@ void run(void)
     	if (memory_size <= abs(pc))
     	    error("Program counter out of range: %c%04o", pc < 0 ? '-' : ' ', abs(pc));
     	{
-            Byte I, I1, I2, device;
+            Byte device;
     	    unsigned long start_time, delta_time;
 
 	    /* --- Instruction trace --- */
     	    if (trace_count && (frequency[pc] <= trace_count))
     	        print_CPU_trace(false);
 
-    	    destructure_cell(safe_fetch(pc), M, I, F, C);
     	    /* MOV adds 2 clocks per word */
     	    start_time = elapsed_time;
-
-            /* --- Indirect addressing --- */
-	    I1 = (I >> 3);
-            I2 = I & 7;
-            if (I != 0) {
-                if (I == 077)
-                    error("Invalid I-field: %02o", I);
-
-                /* (the add can't overflow because the numbers are too small) */
-                if (7 == I1) {
-                    M = field(make_field_spec(0, 3), safe_fetch(M));
-                    elapsed_time++;
-                } else if (I1)
-                    M = add(M, r[I1]);
-                if (7 == I2) {
-                    M = field(make_field_spec(0, 3), safe_fetch(M));
-                    elapsed_time++;
-                } else if (I2)
-                    M = add(M, r[I2]);
-	    }
-
-            io_done = false; rti_done = false;
-            increment_frequency(pc); pc++;
-    	    op_table[C].action();
+            xecute(pc, false);
     	    elapsed_time += op_table[C].clocks;
 
             /* --- I/O subsystem --- */

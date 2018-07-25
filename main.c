@@ -121,7 +121,18 @@ static void assemble_file(const char *filename)
 
 static void usage()
 {
-    fprintf(stderr, "usage: mixal [-d(ump)] [-g(o) device] [-h(elp)] [-i(nterrupt facility)] [-r(edirect reader/punch/printer)] [-t(trace) n]\n");
+    fprintf(stderr, "  usage: mixal [options...] [source...]\n");
+    fprintf(stderr, "options:\n");
+    fprintf(stderr, "         -b             binary MIX installed\n");
+    fprintf(stderr, "         -c             core memory: core.dat, core.ctl\n");
+    fprintf(stderr, "         -d             dump non-zero memory locations\n");
+    fprintf(stderr, "         -f             floating-point attachment installed\n");
+    fprintf(stderr, "         -g devnum      set GO device\n");
+    fprintf(stderr, "         -h             print help\n");
+    fprintf(stderr, "         -i             interrupt facility installed\n");
+    fprintf(stderr, "         -m             Mixmaster installed\n");
+    fprintf(stderr, "         -r             redirect reader/punch/printer\n");
+    fprintf(stderr, "         -t n           trace instructions n times\n");
     exit(1);
 }
 
@@ -140,15 +151,23 @@ int main(int argc, char **argv)
     	for (i = 1; i < argc; ++i) {
             if (*argv[i] == '-')
                 switch (argv[i][1]) {
+		case 'b':
+		    set_mixconfig(MIXCONFIG_BINARY); break;
+		case 'c':
+		    set_mixconfig(MIXCONFIG_CORE); break;
                 case 'd':
                     dump = true; break;
+		case 'f':
+		    set_mixconfig(MIXCONFIG_FLOAT); break;
                 case 'g':
                     if (++i == argc) usage();
                     io_set_go_device(atol(argv[i])); break;
                 case 'h':
                     usage(); break;
 		case 'i':
-		    io_has_interrupt_facility(); break;
+		    set_mixconfig(MIXCONFIG_INTERRUPT); break;
+		case 'm':
+		    set_mixconfig(MIXCONFIG_MASTER); break;
                 case 'r':
                     io_redirect(); break;
                 case 't':

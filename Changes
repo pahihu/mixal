@@ -1,3 +1,8 @@
+180725
+	- mixref.pdf: CP-M, XEQ instruction added
+	- run.c: added CP-M, XEQ, check configuration flags
+	- io.c: interrupt facility flag removed
+	- main.c: usage, mix_config flags
 180718
 	- run.c: CPU trace, status display fixed, indirect addressing
 	- mixref.pdf: JrE, JrO, NEG, XCH, SLB, SRB, OR, XOR, AND added

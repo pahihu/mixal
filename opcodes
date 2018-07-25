@@ -30,6 +30,7 @@ hlt	05	2	x
 int     05      7       x
 neg	05	8	x
 xch	05	9	x
+xeq     05     10	x
 sla	06	0	x
 sra	06	1	x
 slax	06	2	x
@@ -71,6 +72,7 @@ inc-	48	0	x
 dec-	48	1	x
 ent-	48	2	x
 enn-	48	3	x
+cp-m	48	4
 cmp-	56
 orig	x
 equ	x
