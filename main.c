@@ -132,6 +132,7 @@ static void usage()
     fprintf(stderr, "         -h             print help\n");
     fprintf(stderr, "         -i             interrupt facility installed\n");
     fprintf(stderr, "         -m             Mixmaster installed\n");
+    fprintf(stderr, "         -o             punch object cards\n");
     fprintf(stderr, "         -r             redirect reader/punch/printer\n");
     fprintf(stderr, "         -t n           trace instructions n times\n");
     exit(1);
@@ -139,16 +140,18 @@ static void usage()
 
 int main(int argc, char **argv)
 {
-    Flag dump = false;
+    char title[8];
+    Flag dump = false, punch = false;
     
     precompute_field_data();
 
     /* Assemble the input: */
+    strcpy(title, "OBJS");
     install_error_handler(assembler_error);
     if (argc == 1)
 	assemble_file("-");
     else {
-    	int i;
+    	int i, j;
         unsigned flags;
 
 	/* --- Process flags --- */
@@ -171,6 +174,7 @@ int main(int argc, char **argv)
                 case 'h': usage(); break;
 		case 'i': flags += MIXCONFIG_INTERRUPT; break;
 		case 'm': flags += MIXCONFIG_MASTER; break;
+		case 'o': punch = true; break;
                 case 'r': io_redirect(); break;
                 case 't':
                     if (++i == argc) usage();
@@ -187,8 +191,15 @@ int main(int argc, char **argv)
                 char flag = argv[i][1];
                 if (flag == 'e' || flag == 'g' || flag == 't')
                     i++;
-            } else
+            } else {
+                for (j = 0; j < 5; j++) {
+                    int ch = argv[i][j];
+                    if (ch == 0 || ch == '.')
+                        break;
+                }
+                title[j] = '\0';
                 assemble_file(argv[i]);
+            }
         }
 
     }
@@ -197,6 +208,10 @@ int main(int argc, char **argv)
 	    fprintf(stderr, "%u errors found\n", num_errors);
 	    exit(1);
     }
+
+    /* --- Punch object deck --- */
+    if (punch)
+        punch_object(title);
 
     /* Now run it: */
     set_initial_state();

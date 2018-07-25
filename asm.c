@@ -53,3 +53,56 @@ void set_entry_point(Address address)
         printf("entry point: %4o\n", address);
     entry_point = address;
 }
+
+static void punch_card(FILE *fdev, const char *title, Address address)
+{
+    static char overpunch[] = "~JKLMNOPQR";
+    int i, numwords;
+    char buf[16];
+    Cell cell;
+
+    numwords = 0;
+    for (i = 0; i < 7; i++) {
+        if (memory_size <= address + i)
+            break;
+        cell = memory_fetch(address + i);
+        if (magnitude(cell)) {
+            numwords = i + 1;
+        }
+    }
+
+    if (0 == numwords)
+        return;
+
+    fprintf(fdev, "%-5s%1d%04d", title, numwords, address);
+    for (i = 0; i < numwords; i++) {
+        if (memory_size <= address + i)
+            break;
+        cell = memory_fetch(address + i);
+        sprintf(buf, "%010ld", magnitude(cell));
+        if (is_negative(cell))
+            buf[9] = overpunch[buf[9]-'0'];
+        fprintf(fdev, "%s", buf);
+    }
+
+    for (i = numwords; i < 7; i++)
+        fprintf(fdev, "          ");
+
+    fprintf(fdev, "\n");
+}
+
+void punch_object(const char *title)
+{
+    FILE *card_out;
+    Address address;
+
+    card_out = fopen("punch", "w+");
+    if (NULL == card_out)
+        error("Cannot open card puncher");
+    for (address = 100; address < memory_size; address += 7) {
+        punch_card(card_out, title, address);
+    }
+    fprintf(card_out, "TRANS0%04d", abs(entry_point));
+    fflush(card_out);
+    fclose(card_out);
+}
