@@ -1,0 +1,56 @@
+*
+*    CARD LOADER ROUTINE
+*
+********************
+*    C A R D  1    *
+********************
+*
+BUFF       EQU  29                Buffer area is 0029-0044         Card
+           ORIG 0
+LOC        IN   16(16)            Read in second card.             _O_O6
+READ       IN   BUFF(16)          Read next card.                  _Z_O6
+           LD1  0(0:0)            rI1 <- 0.                        ____I
+           JBUS *(16)             Wait for read to finish.         _C_O4
+           LDA  BUFF+1            rA <- columns 6-10.              _0_EH
+A1         SLA  1                                                  _A__F
+           SRAX 6                 rAX <- columns 7-10.             _F_CF
+A30        NUM  30                                                 _0__E
+           STA  LOC               LOC <- starting location.        ___EU
+           LDA  BUFF+1(1:1)                                        _0_IH
+           SUB  A30(0:2)                                           _G_BB
+LOOP       LD3  LOC               rI3 <- LOC.                      ___EJ
+           JAZ  0,3               Jump, if transfer card.          __CA.
+           STA  BUFF              BUFF <- count.                   _Z_EU
+           LDA  LOC                                                ___EH
+           ADD  A1(0:2)                                            _E_BA
+*
+********************
+*    C A R D  2    *
+********************
+*
+           STA  LOC               LOC <- LOC + 1.                  ___EU
+           LDA  BUFF+3,1(5:5)                                      _2A-H
+           SUB  1F(0:2)                                            _S_BB
+           STA  0,3(0:0)          Store the sign.                  __C_U
+           LDA  BUFF+2,1                                           _1AEH
+           LDX  BUFF+3,1                                           _2AEN
+1H         NUM  25                                                 _V__E
+           STA  0,3(1:5)          Store the magnitude.             __CLU
+           MOVE 0,1(2)            rI1 <- rI1 + 2. (!)              __ABG
+           LDA  BUFF                                               _Z_EH
+           SUB  A1(0:2)           Decrease the count.              _E_BB
+           JAP  LOOP              Repeat until the count is zero.  _J_B.
+           JMP  READ              Now read a new card.             _A__9      
+           NOP  0                                                  _____
+           NOP  0                                                  _____
+           NOP  0                                                  _____
+*
+* BINARY DUMP ON CARD PUNCH
+*
+PUNCH      EQU  17
+DUMP       OUT  0(PUNCH)
+           JBUS *(PUNCH)
+           OUT  16(PUNCH)
+           JBUS *(PUNCH)
+           HLT
+           END  DUMP

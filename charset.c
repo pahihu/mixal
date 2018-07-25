@@ -9,7 +9,7 @@
 static const char mix_chars[65] = 
   //           1         2         3         4         5
   // 01234567890123456789012345678901234567890123456789012345
-    " abcdefghi~jklmnopqr[#stuvwxyz0123456789.,()+-*/=$<>@;:'???????";
+    " ABCDEFGHI~JKLMNOPQR[#STUVWXYZ0123456789.,()+-*/=$<>@;:'???????";
 
 char mix_to_C_char(Byte mix_char)
 {
@@ -26,7 +26,7 @@ Byte C_char_to_mix(char c)
     Byte ret;
     const char *s;
 
-    s = strchr(mix_chars, tolower(c));
+    s = strchr(mix_chars, toupper(c));
     if (!s) return 63;
     ret = (Byte) (s - mix_chars);
 
