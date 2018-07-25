@@ -821,6 +821,9 @@ static void xecute(Address address, Flag save_context)
     rti_done = false;
     increment_frequency(pc); pc++;
     op_table[C].action();
+    if (save_context)
+        elapsed_time += op_table[C].clocks;
+
     if (true == wait_state)
         pc--;
 
