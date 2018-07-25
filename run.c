@@ -13,6 +13,32 @@
 
 static void xecute(Address address, Flag save_context);
 
+static void save_memory(const char *path, Cell *store, unsigned size)
+{
+    FILE *fout;
+    size_t cells_written;
+
+    fout = fopen(path, "wb");
+    if (NULL == fout)
+        error("Cannot open %s", path);
+    cells_written = fwrite(store, sizeof(Cell), size, fout);
+    fclose(fout);
+    if (cells_written != size)
+        error("Cannot write %d cells to %s", size, path);
+}
+
+static void load_memory(const char *path, Cell *store, unsigned size)
+{
+    FILE *fin;
+    size_t cells_read;
+
+    fin = fopen(path, "rb");
+    if (NULL == fin)
+        return;
+    cells_read = fread(store, sizeof(Cell), size, fin);
+    fclose(fin);
+}
+
 static void stop(const char *message, va_list args)
 {
     fprintf(stderr, "RUNTIME ERROR: ");
@@ -53,6 +79,7 @@ void set_trace_count(unsigned value)
 
 void set_initial_state(void)
 {
+    /* --- Initialize I/O system --- */
     io_init();
 
     overflow = false;
@@ -60,6 +87,8 @@ void set_initial_state(void)
     internal_state = (mix_config & MIXCONFIG_INTERRUPT)
 			? control_state 
 			: normal_state;
+
+    /* --- Init real-time clock --- */
     rtc_busy = 0;
     rtc_int_pending = false;
     {
@@ -75,11 +104,23 @@ State get_internal_state(void)
     return internal_state;
 }
 
-void set_mixconfig(unsigned flags)
+static void init_configuration(void)
 {
-    if (MIXCONFIG_MASTER == flags)
+    /* --- Load core memory --- */
+    if (mix_config & MIXCONFIG_CORE) {
+        if (mix_config & MIXCONFIG_INTERRUPT)
+            load_memory("mixcore.ctl", control_memory, memory_size);
+        load_memory("mixcore.dat", memory, memory_size);
+    }
+}
+
+void set_configuration(unsigned flags)
+{
+    if (MIXCONFIG_MASTER & flags)
         flags = (unsigned) -1;
     mix_config |= flags;
+
+    init_configuration();
 }
 
 static void check_master(void)
@@ -252,8 +293,13 @@ static jmp_buf escape_k;    /* continuation to escape from interpreter */
 static Byte C;
 static Byte F;
 static Cell M;
-static Flag io_done;
-static Flag rti_done;
+static Flag wait_state;         /* wait state */
+static Flag rti_done;           /* return from interrupt executed */
+
+void set_wait_state(void)
+{
+    wait_state = true;
+}
 
 void print_DUMP(void)
 {
@@ -543,9 +589,9 @@ static void do_jred(void)
         jump();
 }
 
-static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); io_done = true; }
-static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)); io_done = true; }
-static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); io_done = true; }
+static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); }
+static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)); }
+static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); }
 
 static void compare(Cell cell)
 {
@@ -771,9 +817,12 @@ static void xecute(Address address, Flag save_context)
        }
     }
 
-    io_done = false; rti_done = false;
+    wait_state = false;
+    rti_done = false;
     increment_frequency(pc); pc++;
     op_table[C].action();
+    if (true == wait_state)
+        pc--;
 
     if (save_context) {
         C  = saved_C;
@@ -788,8 +837,14 @@ void run(void)
     Byte go_device = DEVICE_INVALID;
 
     install_error_handler(stop);
-    if (setjmp(escape_k) != 0)
+    if (setjmp(escape_k) != 0) {
+        if (mix_config & MIXCONFIG_CORE) {
+            if (mix_config & MIXCONFIG_INTERRUPT)
+                save_memory("mixcore.ctl", control_memory, memory_size);
+            save_memory("mixcore.dat", memory, memory_size);
+        }
 	return;
+    }
 
     go_device = io_go_device();
     if (DEVICE_INVALID != go_device) {
@@ -818,7 +873,7 @@ void run(void)
 
             /* --- I/O subsystem --- */
 	    delta_time = elapsed_time - start_time;
-            if (!io_done && io_scheduled())
+            if ((false == wait_state) && io_scheduled())
                 do_scheduled_io(delta_time);
 
             /* --- Real-time clock --- */
@@ -827,8 +882,6 @@ void run(void)
                     Cell cell = sub(control_memory[10], ulong_to_cell(1));
 		    control_memory[10] = cell;
 		    if (magnitude(cell)) {
-		        if (delta_time > 1000 + rtc_busy)
-		            delta_time = delta_time % 1000;
 		        rtc_busy = 1000 + rtc_busy - delta_time;
 		    } else {
 			rtc_busy = 0;
@@ -859,3 +912,4 @@ void run(void)
     	}
     }
 }
+

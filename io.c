@@ -17,7 +17,6 @@ static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
 int control_incomplete[memory_size];        /* mark cell used by I/O */
-static unsigned int_sequence = 0;	    /* interrupt sequence counter */
 #define READ    (-1)
 #define WRITE   (-((int) num_devices + 1))
 
@@ -73,9 +72,9 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* tape */      { "tape",   7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
-/* disk */      { "disk",   4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
 /* drum */      { "drum",     64, 100, disk_in, disk_out, disk_ioc,        4750,    0}, /* B430 */
+/* disk */      { "disk",   4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
+/* tape */      { "tape",   7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
 /* card_in */   { "reader",    0,  16, text_in, no_out,   no_ioc,        150000,    0}, /* B122 */
 /* card_out */  { "punch",     0,  16, no_in,   text_out, no_ioc,        300000,    0}, /* B303 */
 /* printer */   { "printer",   0,  24, no_in,   text_out, printer_ioc,    63158, 2500}, /* B320 */
@@ -279,7 +278,7 @@ static void do_io(Byte device)
                            operation == input ? -WRITE : -READ);
         
     if (devices[device].int_request == true)
-        devices[device].int_pending = ++int_sequence;
+        devices[device].int_pending = true;
 
     devices[device].busy = 0;
 }
@@ -289,13 +288,20 @@ static unsigned do_operation(Byte device, Operation operation,
 {
     unsigned clocks = 0;
 
-    if (devices[device].int_pending)
+    /*
+    if (true == devices[device].int_pending)
         error("Interrupt pending - %02o", device);
+    */
 
     if (devices[device].busy) {
+	/*
         clocks = devices[device].busy;
+	*/
+        clocks = 1;
         idle_time += clocks;
         do_scheduled_io(clocks);
+        set_wait_state();
+        return clocks;
     }
 
     if (control_state == get_internal_state())
@@ -311,7 +317,7 @@ static unsigned do_operation(Byte device, Operation operation,
         case output:  attributes(device)->out_handler(device, argument, buffer); break;
         }
         if (devices[device].int_request == true)
-            devices[device].int_pending = ++int_sequence;
+            devices[device].int_pending = true;
     }
     return clocks;
 }
@@ -711,21 +717,22 @@ Flag io_incomplete(Address address, Access access)
 Flag io_pending_interrupt(Byte *int_device)
 {
     Byte device, next_device;
-    unsigned next_int_pending;
+    enum DeviceType next_device_type;
 
-    next_int_pending = (unsigned) -1;
+    next_device_type = (enum DeviceType) (LAST_DEVICE_TYPE + 1);
     next_device      = DEVICE_INVALID;
     for (device = 0; device < num_devices; device++) {
-        if (devices[device].busy || devices[device].int_pending == 0)
+        if (devices[device].busy || false == devices[device].int_pending)
             continue;
-        if (devices[device].int_pending < next_int_pending) {
-            next_int_pending = devices[device].int_pending;
+	/* select device by priority */
+        if (devices[device].type < next_device_type) {
+            next_device_type = devices[device].type;
             next_device = device;
         }
     }
     if (DEVICE_INVALID != next_device) {
         devices[device].int_request = false;
-        devices[device].int_pending = 0;
+        devices[device].int_pending = false;
         *int_device = next_device;
         return true;
     }

@@ -124,8 +124,9 @@ static void usage()
     fprintf(stderr, "  usage: mixal [options...] [source...]\n");
     fprintf(stderr, "options:\n");
     fprintf(stderr, "         -b             binary MIX installed\n");
-    fprintf(stderr, "         -c             core memory: core.dat, core.ctl\n");
+    fprintf(stderr, "         -c             core memory: mixcore.dat, mixcore.ctl\n");
     fprintf(stderr, "         -d             dump non-zero memory locations\n");
+    fprintf(stderr, "         -e address     set entry point\n");
     fprintf(stderr, "         -f             floating-point attachment installed\n");
     fprintf(stderr, "         -g devnum      set GO device\n");
     fprintf(stderr, "         -h             print help\n");
@@ -148,37 +149,48 @@ int main(int argc, char **argv)
 	assemble_file("-");
     else {
     	int i;
+        unsigned flags;
+
+	/* --- Process flags --- */
+        flags = 0;
     	for (i = 1; i < argc; ++i) {
             if (*argv[i] == '-')
                 switch (argv[i][1]) {
-		case 'b':
-		    set_mixconfig(MIXCONFIG_BINARY); break;
-		case 'c':
-		    set_mixconfig(MIXCONFIG_CORE); break;
-                case 'd':
-                    dump = true; break;
-		case 'f':
-		    set_mixconfig(MIXCONFIG_FLOAT); break;
+		case 'b': flags += MIXCONFIG_BINARY; break;
+		case 'c': flags += MIXCONFIG_CORE; break;
+                case 'd': dump = true; break;
+		case 'e':
+                    if (++i == argc) usage();
+                    entry_point = atol(argv[i]);
+                    break;
+		case 'f': flags += MIXCONFIG_FLOAT; break;
                 case 'g':
                     if (++i == argc) usage();
-                    io_set_go_device(atol(argv[i])); break;
-                case 'h':
-                    usage(); break;
-		case 'i':
-		    set_mixconfig(MIXCONFIG_INTERRUPT); break;
-		case 'm':
-		    set_mixconfig(MIXCONFIG_MASTER); break;
-                case 'r':
-                    io_redirect(); break;
+                    io_set_go_device(atol(argv[i]));
+                    break;
+                case 'h': usage(); break;
+		case 'i': flags += MIXCONFIG_INTERRUPT; break;
+		case 'm': flags += MIXCONFIG_MASTER; break;
+                case 'r': io_redirect(); break;
                 case 't':
                     if (++i == argc) usage();
-                    set_trace_count(atol(argv[i])); break;
-                default:
-                    usage();
+                    set_trace_count(atol(argv[i]));
+                    break;
+                default: usage();
                 }
-            else
-            assemble_file(argv[i]);
         }
+        set_configuration(flags);
+
+        /* --- Assemble MIXAL source files --- */
+    	for (i = 1; i < argc; i++) {
+            if (*argv[i] == '-') {
+                char flag = argv[i][1];
+                if (flag == 'e' || flag == 'g' || flag == 't')
+                    i++;
+            } else
+                assemble_file(argv[i]);
+        }
+
     }
     resolve_generated_futures();
     if (num_errors != 0) {

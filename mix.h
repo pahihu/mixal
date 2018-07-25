@@ -24,8 +24,9 @@ void fatal_error(const char *message, ...);
 #define memory_size 4000
 
 /* Device types: */
-enum DeviceType { tape, disk, drum, card_in, card_out, printer, console };
+enum DeviceType { drum, disk, tape, card_in, card_out, printer, console };
 extern enum DeviceType current_device_type;
+#define LAST_DEVICE_TYPE (console)
 
 #include "cell.h"
 

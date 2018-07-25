@@ -1,4 +1,7 @@
 180725
+	- run.c, io.c: added wait state, interrupts are serviced by priority
+	- mix.h: device types are reordered by priority
+	- main.c: added '-e' flag to set entry point, '-c' for core memory
 	- mixref.pdf: CP-M, XEQ instruction added
 	- run.c: added CP-M, XEQ, check configuration flags
 	- io.c: interrupt facility flag removed
