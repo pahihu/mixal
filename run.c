@@ -54,11 +54,11 @@ static unsigned long elapsed_time = 0;      /* in Tyme units */
 /* --- The CPU state --- */
 
 Cell memory[memory_size];
-Cell control_memory[memory_size];	    /* control store    */
+Cell control_memory[memory_size];            /* control store    */
 unsigned frequency[memory_size];            /* frequency counts */
 unsigned control_frequency[memory_size];    /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
-unsigned mix_config = 0;		    /* MIX configuration */
+unsigned mix_config = 0;                    /* MIX configuration */
 
 #define A 0
 #define X 7
@@ -68,8 +68,8 @@ static Cell r[10];      /* the registers; except that r[9] == zero. */
 static int comparison_indicator;    /* the overflow toggle is defined in cell.c */
 static Address pc;                  /* the program counter */
 static State internal_state;        /* MIX internal state  */
-static int rtc_busy;		    /* real-time clock active */
-static Flag rtc_int_pending;	    /* real-time clock interrupt pending */
+static int rtc_busy;                /* real-time clock active */
+static Flag rtc_int_pending;        /* real-time clock interrupt pending */
 
 void set_trace_count(unsigned value)
 {
@@ -84,16 +84,16 @@ void set_initial_state(void)
     overflow = false;
     comparison_indicator = 0;
     internal_state = (mix_config & MIXCONFIG_INTERRUPT)
-			? control_state 
-			: normal_state;
+            ? control_state 
+            : normal_state;
 
     /* --- Init real-time clock --- */
     rtc_busy = 0;
     rtc_int_pending = false;
     {
-	unsigned i;
-	for (i = 0; i < 10; ++i)
-	    r[i] = zero;
+    unsigned i;
+    for (i = 0; i < 10; ++i)
+        r[i] = zero;
     }
     pc = entry_point;       /*** need to check for no entry point */
 }
@@ -140,6 +140,12 @@ static void check_interrupt(void)
         error("No interrupt facility installed");
 }
 
+static void check_float(void)
+{
+    if (0 == (mix_config & MIXCONFIG_FLOAT))
+        error("No floating point attachment installed");
+}
+
 static unsigned fetch_frequency(Address address)
 {
     return address < 0 ? control_frequency[-address] : frequency[address];
@@ -153,7 +159,7 @@ static void increment_frequency(Address address)
         frequency[address]++;
 }
 
-#define SIGN(x)		((x) < 0 ? -1 : (x) > 0 ? 1 : 0)
+#define SIGN(x)        ((x) < 0 ? -1 : (x) > 0 ? 1 : 0)
 
 static void save_state(void)
 {
@@ -209,20 +215,20 @@ void print_CPU_state(void)
     printf ("A:");
     print_cell (r[A]);
     printf ("\t");
-    {						/* Print the index registers: */
+    {                        /* Print the index registers: */
         unsigned i;
         for (i = 1; i <= 6; ++i)
-	    printf ("I%u:%s%04lo  ",
-	        i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+        printf ("I%u:%s%04lo  ",
+            i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf ("\nX:");
     print_cell (r[X]);
-    printf ("\t J: %04lo", magnitude (r[J]));	/* (it's always nonnegative) */
+    printf ("\t J: %04lo", magnitude (r[J]));    /* (it's always nonnegative) */
     printf ("  PC:"); print_pc();
     printf ("  Flags: %-7s %-8s %-7s",
         comparison_indicator < 0 ? "less" :
-	    comparison_indicator == 0 ? "equal" : "greater",
-	overflow ? "overflow" : "",
+        comparison_indicator == 0 ? "equal" : "greater",
+    overflow ? "overflow" : "",
         control_state == internal_state ? "control" : "");
     printf (" %11lu elapsed (%lu idle)\n", elapsed_time, idle_time);
 }
@@ -237,7 +243,7 @@ Cell memory_fetch(Address address)
         error("Address out of range");
 
     if (address < 0) {
-	check_interrupt();
+        check_interrupt();
         if (normal_state == internal_state)
             error("Cannot access control store in normal state");
 
@@ -255,7 +261,7 @@ void memory_store(Address address, Cell cell)
         error("Address out of range");
 
     if (address < 0) {
-	check_interrupt();
+    check_interrupt();
         if (normal_state == internal_state)
             error("Cannot access control store in normal state");
 
@@ -328,9 +334,8 @@ void print_DUMP(void)
                 printf (" %11s", "");
         }
         printf("     ");
-        for (j = 0; j < 4; j++) {
+        for (j = 0; j < 4; j++)
             printf(" %05d", frequency[address + j]);
-        }
         printf("\n");
     }
 }
@@ -346,108 +351,131 @@ static void do_nop(void)    { }
 
 static void do_add(void)
 {
-    Cell v = get_V();
-
-    if (7 == F) {
-	check_binary();
-	r[A] = logical_sum(r[A], v);
-    }
-    else if (F)
-	error("Unknown extended opcode");
-    else
-        r[A] = add(r[A], v);
+    if (6 == F) {
+        check_float();
+        r[A] = float_add(r[A], safe_fetch(cell_to_address(M)));
+    } else
+        r[A] = add(r[A], get_V());
 }
 
 static void do_sub(void)
 {
-    Cell v = get_V();
-
-    if (7 == F) {
-	check_binary();
-        r[A] = logical_difference(r[A], v);
-    }
-    else if (F)
-	error("Unknown extended opcode");
-    else
-        r[A] = sub(r[A], v);
+    if (6 == F) {
+        check_float();
+        r[A] = float_subtract(r[A], safe_fetch(cell_to_address(M)));
+    } else
+        r[A] = sub(r[A], get_V());
 }
 
 static void do_mul(void)
 {
-    Cell v = get_V();
-
-    if (7 == F) {
-       check_binary();
-       r[A] = logical_product(r[A], v);
-    }
-    else if (F)
-	error("Unknown extended opcode");
-    else
-        multiply(r[A], v, &r[A], &r[X]);
+    if (6 == F) {
+        check_float();
+        r[A] = float_multiply(r[A], safe_fetch(cell_to_address(M)));
+    } else
+        multiply(r[A], get_V(), &r[A], &r[X]);
 }
 
-static void do_div(void)    { divide(r[A], r[X], get_V(), &r[A], &r[X]); }
+static void do_div(void)
+{
+    if (6 == F) {
+        check_float();
+        r[A] = float_divide(r[A], safe_fetch(cell_to_address(M)));
+    } else
+        divide(r[A], r[X], get_V(), &r[A], &r[X]);
+}
+
+/* 11-punch: ~JKLMNOPQR instead of 0123456789 */
+static int overpunched(Cell cell)
+{
+    Byte mix_char = get_byte(5, cell);
+    return (9 < mix_char) && (mix_char < 20);
+}
+
+static Cell flip_chars(Cell cell)
+{
+    int i;
+    Cell ret = zero;
+
+    for (i = 1; i <= 5; i++) {
+        Byte mix_char = get_byte(i, cell);
+        if ((29 < mix_char) && (mix_char < 40))
+            mix_char = mix_char - 20;
+        ret = set_byte(mix_char, i, ret);
+    }
+    return ret;
+}
 
 static void do_special(void)
 {
     switch (F) {
-	case 0: { /* NUM */
-	    unsigned i;
-	    Cell num = zero;
-	    Cell ten = ulong_to_cell(10);
-	    for (i = 1; i <= 5; ++i)
-		num = add(mul(ten, num), (Cell)(get_byte(i, r[A]) % 10));
-	    for (i = 1; i <= 5; ++i)
-		num = add(mul(ten, num), (Cell)(get_byte(i, r[X]) % 10));
-	    r[A] = is_negative(r[A]) ? negative(num) : num;
-	    break;
-	}
-	case 1: { /* CHAR */
-	    unsigned long num = magnitude(r[A]);
-	    unsigned z = (unsigned) C_char_to_mix('0');
-	    unsigned i;
-	    for (i = 5; 0 < i; --i, num /= 10)
-		r[X] = set_byte((Byte) (z + num % 10), i, r[X]);
-	    for (i = 5; 0 < i; --i, num /= 10)
-		r[A] = set_byte((Byte) (z + num % 10), i, r[A]);
-	    break;
-	}
-	case 2: /* HLT */
-            elapsed_time += io_finish();
-	    longjmp(escape_k, 1);
-            break;
-        case 7: { /* INT */
-            check_interrupt();
-            if (normal_state == internal_state) {
-                save_state();
-		internal_state = control_state;
-                pc = -12;
-            } else {
-                restore_state();
-		internal_state = normal_state;
-		rti_done = true;
-            }
-	    elapsed_time++;
-            break;
-	}
-	case 8: { /* NEG */
-	    check_binary();
-	    unsigned long cell = ~magnitude(r[A]);
-	    r[A] = is_negative(r[A]) ? negative(cell) : cell;
-	    break;
-	}
-	case 9: { /* XCH */
-	    check_binary();
-	    Cell cell = r[A];
-	    r[A] = r[X]; r[X] = cell;
-	    break;
-	}
-	case 10: { /* XEQ */
-            check_master();
-            xecute(cell_to_address(M), true);
-            break;
-	}
-	default: error("Unknown extended opcode");
+    case 0: { /* NUM */
+        unsigned i;
+        Cell num = zero;
+        Cell ten = ulong_to_cell(10);
+        if (overpunched(r[X])) {
+            r[X] = flip_chars(r[X]);
+            r[X] = flip_chars(r[A]);
+        }
+        for (i = 1; i <= 5; ++i)
+            num = add(mul(ten, num), (Cell)(get_byte(i, r[A]) % 10));
+        for (i = 1; i <= 5; ++i)
+            num = add(mul(ten, num), (Cell)(get_byte(i, r[X]) % 10));
+        r[A] = is_negative(r[A]) ? negative(num) : num;
+        break;
+    }
+    case 1: { /* CHAR */
+        unsigned long num = magnitude(r[A]);
+        unsigned z = (unsigned) C_char_to_mix('0');
+        unsigned i;
+        for (i = 5; 0 < i; --i, num /= 10)
+            r[X] = set_byte((Byte) (z + num % 10), i, r[X]);
+        for (i = 5; 0 < i; --i, num /= 10)
+            r[A] = set_byte((Byte) (z + num % 10), i, r[A]);
+        break;
+    }
+    case 2: /* HLT */
+        elapsed_time += io_finish();
+        longjmp(escape_k, 1);
+        break;
+    case 3: /* AND */
+        check_binary();
+        r[A] = logical_product(r[A], get_V());
+        break;
+    case 4: /* OR  */
+        check_binary();
+        r[A] = logical_sum(r[A], get_V());
+        break;
+    case 5: /* XOR */
+        check_binary();
+        r[A] = logical_difference(r[A], get_V());
+        break;
+    case 6: /* FLOT */
+        check_float();
+        r[A] = float_flot(r[A]);
+        break;
+    case 7: /* FIX  */
+        check_float();
+        r[A] = float_fix(r[A]);
+        break;
+    case 8: { /* NEG */
+        check_binary();
+        unsigned long cell = ~magnitude(r[A]);
+        r[A] = is_negative(r[A]) ? negative(cell) : cell;
+        break;
+    }
+    case 9: { /* XCH */
+        check_binary();
+        Cell cell = r[A];
+        r[A] = r[X]; r[X] = cell;
+        break;
+    }
+    case 10: { /* XEQ */
+        check_master();
+        xecute(cell_to_address(M), true);
+        break;
+    }
+    default: error("Unknown extended opcode");
     }
 }
 
@@ -455,40 +483,55 @@ static void do_shift(void)
 {
     Cell ignore;
     unsigned long count = magnitude(M);
+
     if (is_negative(M) && count != 0)
-	error("Negative shift count");
+        error("Negative shift count");
     switch (F) {
-	case 0: /* SLA */
-	    shift_left(zero, r[A], count, &ignore, &r[A]);
-	    break;
-	case 1: /* SRA */
-	    shift_right(r[A], zero, count, &r[A], &ignore);
-	    break;
-	case 2: /* SLAX */
-	    shift_left(r[A], r[X], count, &r[A], &r[X]);
-	    break;
-	case 3: /* SRAX */
-	    shift_right(r[A], r[X], count, &r[A], &r[X]);
-	    break;
-	case 4: /* SLC  */
-	    shift_left_circular(r[A], r[X], (unsigned)(count % 10), &r[A], &r[X]);
-	    break;
-	case 5: { /* SRC */
-	    unsigned c = (10 - count % 10) % 10;    /* -count modulo 10 */
-	    shift_left_circular(r[A], r[X], c, &r[A], &r[X]);
-	    break;
-	}
-	case 6: { /* SLB */
-	    check_binary();
-	    shift_left_binary(r[A], r[X], count, &r[A], &r[X]);
-	    break;
-	}
-	case 7: { /* SRB */
-	    check_binary();
-	    shift_right_binary(r[A], r[X], count, &r[A], &r[X]);
-	    break;
-	}
-	default: error("Unknown extended opcode");
+    case 0: /* SLA */
+        shift_left(zero, r[A], count, &ignore, &r[A]);
+        break;
+    case 1: /* SRA */
+        shift_right(r[A], zero, count, &r[A], &ignore);
+        break;
+    case 2: /* SLAX */
+        shift_left(r[A], r[X], count, &r[A], &r[X]);
+        break;
+    case 3: /* SRAX */
+        shift_right(r[A], r[X], count, &r[A], &r[X]);
+        break;
+    case 4: /* SLC  */
+        shift_left_circular(r[A], r[X], (unsigned)(count % 10), &r[A], &r[X]);
+        break;
+    case 5: { /* SRC */
+        unsigned c = (10 - count % 10) % 10;    /* -count modulo 10 */
+        shift_left_circular(r[A], r[X], c, &r[A], &r[X]);
+        break;
+    }
+    case 6: { /* SLB */
+        check_binary();
+        shift_left_binary(r[A], r[X], count, &r[A], &r[X]);
+        break;
+    }
+    case 7: { /* SRB */
+        check_binary();
+        shift_right_binary(r[A], r[X], count, &r[A], &r[X]);
+        break;
+    }
+    case 9: { /* INT */
+        check_interrupt();
+        if (normal_state == internal_state) {
+            save_state();
+            internal_state = control_state;
+            pc = -12;
+        } else {
+            restore_state();
+            internal_state = normal_state;
+            rti_done = true;
+        }
+        elapsed_time++;
+        break;
+    }
+    default: error("Unknown extended opcode");
     }
 }
 
@@ -498,13 +541,13 @@ static void do_move(void)
     Address to = cell_to_address(r[1]);
     unsigned count = F;
     for (; count != 0; --count) {
-	    // if (memory_size <= from + count || memory_size <= to + count)
-	        // error("Address out of range");
-	    // memory[to + count] = memory[from + count];
-	    safe_store(to + count, safe_fetch(from + count));
-	    elapsed_time += 2;
+        // if (memory_size <= from + count || memory_size <= to + count)
+            // error("Address out of range");
+        // memory[to + count] = memory[from + count];
+        safe_store(to + count, safe_fetch(from + count));
+        elapsed_time += 2;
     }
-    r[1] = address_to_cell(to + count);
+    r[1] = address_to_cell(to + F);
 }
 
 static void do_lda(void)    { r[A] = get_V(); }
@@ -512,7 +555,7 @@ static void do_ldx(void)    { r[X] = get_V(); }
 static void do_ldi(void) { 
     Cell cell = get_V();
     if (INDEX_MAX < magnitude(cell))
-	error("Magnitude too large for index register: %10o", magnitude(cell));
+        error("Magnitude too large for index register: %10o", magnitude(cell));
     r[C & 7] = cell; 
 }
 
@@ -521,7 +564,7 @@ static void do_ldxn(void)   { r[X] = negative(get_V()); }
 static void do_ldin(void) {
     Cell cell = get_V();
     if (INDEX_MAX < magnitude(cell))
-	error("Magnitude too large for index register: %10o", magnitude(cell));
+        error("Magnitude too large for index register: %10o", magnitude(cell));
     r[C & 7] = negative(cell);
 }
 
@@ -541,19 +584,19 @@ static void jump(void)
 static void branch(unsigned condition, int sign, Cell cell)
 {
     switch (condition) {
-	case  0: jump(); break;
-	case  1: pc = cell_to_address(M); break;
-	case  2: if (overflow)  jump(); overflow = false; break;
-	case  3: if (!overflow) jump(); overflow = false; break;
-	case  4: if (sign <  0) jump(); break;
-	case  5: if (sign == 0) jump(); break;
-	case  6: if (sign  > 0) jump(); break;
-	case  7: if (sign >= 0) jump(); break;
-	case  8: if (sign != 0) jump(); break;
-	case  9: if (sign <= 0) jump(); break;
-        case 10: check_binary(); if (0 == (magnitude(cell) & 2)) jump(); break;
-        case 11: check_binary(); if (1 == (magnitude(cell) & 2)) jump(); break;
-	default: error("Bad branch condition");
+    case  0: jump(); break;
+    case  1: pc = cell_to_address(M); break;
+    case  2: if (overflow)  jump(); overflow = false; break;
+    case  3: if (!overflow) jump(); overflow = false; break;
+    case  4: if (sign <  0) jump(); break;
+    case  5: if (sign == 0) jump(); break;
+    case  6: if (sign  > 0) jump(); break;
+    case  7: if (sign >= 0) jump(); break;
+    case  8: if (sign != 0) jump(); break;
+    case  9: if (sign <= 0) jump(); break;
+    case 10: check_binary(); if (0 == (magnitude(cell) & 2)) jump(); break;
+    case 11: check_binary(); if (1 == (magnitude(cell) & 2)) jump(); break;
+    default: error("Bad branch condition");
     }
 }
 
@@ -595,8 +638,8 @@ static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address
 static void compare(Cell cell)
 {
     Flag saved = overflow;
-    Cell difference = sub(field(F, r[C & 7]), 
-			  field(F, cell));
+
+    Cell difference = sub(field(F, r[C & 7]), field(F, cell));
     comparison_indicator = sign_of_difference(difference);
     overflow = saved;
 }
@@ -605,24 +648,31 @@ static void do_addr_op(void)
 {
     Cell cell;
     unsigned reg = C & 7;
+
     switch (F) {
-	case 0: cell = add(r[reg], M); break;
-	case 1: cell = sub(r[reg], M); break;
-	case 2: cell = M; break;
-	case 3: cell = negative(M); break;
- 	case 4: check_master(); compare(M); return;
-	default: error("Unknown extended opcode"); cell = zero;
+    case 0: cell = add(r[reg], M); break;
+    case 1: cell = sub(r[reg], M); break;
+    case 2: cell = M; break;
+    case 3: cell = negative(M); break;
+    case 4: check_master(); compare(M); return;
+    default: error("Unknown extended opcode"); cell = zero;
     }
     if (reg - 1 < 6)        /* same as: 1 <= reg && reg <= 6 */
-	if (INDEX_MAX < magnitude(cell))
-	    error("Magnitude too large for index register: %10o", 
-		  magnitude(cell));
+        if (INDEX_MAX < magnitude(cell))
+            error("Magnitude too large for index register: %10o", 
+              magnitude(cell));
     r[reg] = cell;
 }
 
 static void do_compare(void)
 {
-    compare(safe_fetch(cell_to_address(M)));
+    Cell cell = safe_fetch(cell_to_address(M));
+
+    if (6 == F) {
+        check_float();
+        comparison_indicator = float_compare(r[A], cell);
+    } else
+        compare(cell);
 }
 
 static const struct {
@@ -631,12 +681,12 @@ static const struct {
     const char *mnemonic;
 } op_table[64] = {
     { do_nop, 1, "NOP" },
-    { do_add, 2, "*ADD U11 U12 U13 U14 U15 U16 OR  " },
-    { do_sub, 2, "*SUB U21 U22 U23 U24 U25 U26 XOR " },
-    { do_mul, 10, "*MUL U31 U32 U33 U34 U35 U36 AND " },
-    { do_div, 12, "DIV" },
-    { do_special, 1, "*NUM CHARHLT U53 U54 U55 U56 INT NEG XCH " },
-    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC SLB SRB " },
+    { do_add, 2, "%ADD ADD ADD ADD ADD ADD FADDU017" },
+    { do_sub, 2, "%SUB SUB SUB SUB SUB SUB FSUBU027" },
+    { do_mul, 10, "%MUL MUL MUL MUL MUL MUL FMULU037" },
+    { do_div, 12, "%DIV DIV DIV DIV DIV DIV FDIVU047" },
+    { do_special, 1, "*NUM CHARHLT AND OR  XOR FLOTFIX NEG XCH " },
+    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC SLB SRB U068INT " },
     { do_move, 1, "MOV" },
 
     { do_lda, 2, "LDA" },
@@ -693,7 +743,7 @@ static const struct {
     { do_addr_op, 1, "*INC6DEC6ENT6ENN6CP6M" },
     { do_addr_op, 1, "*INCXDECXENTXENNXCPXM" },
 
-    { do_compare, 2, "CMPA" },
+    { do_compare, 2, "%CMPACMPACMPACMPACMPACMPAFCMPU707" },
     { do_compare, 2, "CMP1" },
     { do_compare, 2, "CMP2" },
     { do_compare, 2, "CMP3" },
@@ -710,6 +760,10 @@ static const char* mnemonic(Byte C, Byte F)
     
     if (*ret == '*') {
         strncpy(buffer, ret + 1 + F * 4, 4);
+        buffer[4] = '\0';
+        ret = buffer;
+    } else if (*ret == '%') {
+        strncpy(buffer, ret + 1 + (7 & F) * 4, 4);
         buffer[4] = '\0';
         ret = buffer;
     }
@@ -743,11 +797,11 @@ void print_CPU_trace(Flag header)
     {
         unsigned i;
         for (i = 1; i <= 6; ++i)
-	    printf (" %s%04lo", is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+        printf (" %s%04lo", is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
     }
     printf (" +%04lo", magnitude (r[J]));
     printf (" %c%c%c ", " X"[overflow ? 1: 0],
-		       "LEG"[1 + SIGN(comparison_indicator)],
+               "LEG"[1 + SIGN(comparison_indicator)],
                         " C"[control_state == internal_state ? 1 : 0]);
     printf (" %08lu\n", elapsed_time);
 }
@@ -841,8 +895,6 @@ static void xecute(Address address, Flag save_context)
 
 void run(void)
 {
-    Byte go_device = DEVICE_INVALID;
-
     install_error_handler(stop);
     if (setjmp(escape_k) != 0) {
         if (mix_config & MIXCONFIG_CORE) {
@@ -850,73 +902,73 @@ void run(void)
                 save_memory("mixcore.ctl", control_memory, memory_size);
             save_memory("mixcore.dat", memory, memory_size);
         }
-	return;
+        return;
     }
 
-    go_device = io_go_device();
-    if (DEVICE_INVALID != go_device) {
-        M = 0; F = go_device; C = 36;
+    /* --- Go device support --- */
+    if (MIXCONFIG_PUSHGO & mix_config) {
+        M = 0; F = io_go_device(); C = 36;
         op_table[C].action();
-        pc = 0;
+        io_finish();
     }
 
+    pc = 0;
     if (trace_count)
         print_CPU_trace(true);
     for (;;) {
-    	if (memory_size <= abs(pc))
-    	    error("Program counter out of range: %c%04o", pc < 0 ? '-' : ' ', abs(pc));
-    	{
-            Byte device;
-    	    unsigned long start_time, delta_time;
+        if (memory_size <= abs(pc))
+            error("Program counter out of range: %c%04o", pc < 0 ? '-' : ' ', abs(pc));
+        {
+            unsigned long start_time, delta_time;
 
-	    /* --- Instruction trace --- */
-    	    if (trace_count && (frequency[pc] <= trace_count))
-    	        print_CPU_trace(false);
+            /* --- Instruction trace --- */
+            if (trace_count && (frequency[pc] <= trace_count))
+                print_CPU_trace(false);
 
-    	    /* MOV adds 2 clocks per word */
-    	    start_time = elapsed_time;
+            /* MOV adds 2 clocks per word */
+            start_time = elapsed_time;
             xecute(pc, false);
-    	    elapsed_time += op_table[C].clocks;
+            elapsed_time += op_table[C].clocks;
 
             /* --- I/O subsystem --- */
-	    delta_time = elapsed_time - start_time;
+            delta_time = elapsed_time - start_time;
             if ((false == wait_state) && io_scheduled())
                 do_scheduled_io(delta_time);
 
             /* --- Real-time clock --- */
-	    if (rtc_busy) {
-		if (rtc_busy <= delta_time) {
+            if (rtc_busy) {
+                if (rtc_busy <= delta_time) {
                     Cell cell = sub(control_memory[10], ulong_to_cell(1));
-		    control_memory[10] = cell;
-		    if (magnitude(cell)) {
-		        rtc_busy = 1000 + rtc_busy - delta_time;
-		    } else {
-			rtc_busy = 0;
-                        rtc_int_pending = true;
-		    }
-		} else
-		    rtc_busy -= delta_time;
-            }
+                    control_memory[10] = cell;
+                    if (magnitude(cell))
+                        rtc_busy = 1000 + rtc_busy - delta_time;
+                    else
+                        rtc_busy = 0;
+                    rtc_int_pending = true;
+                }
+            } else
+                rtc_busy -= delta_time;
 
             /* --- Interrupt facility --- */
-	    if (!rti_done && 
+            if (!rti_done && 
                 normal_state == internal_state)
             {
-		Address int_pc = 0;
-		if (true == rtc_int_pending) {
+                Address int_pc = 0;
+                Byte device;
+
+                if (true == rtc_int_pending) {
                     rtc_int_pending = false;
                     int_pc = -11;
-		}
-                else if (true == io_pending_interrupt(&device)) {
-		    int_pc = -(20 + device);
                 }
+                else if (true == io_pending_interrupt(&device))
+                    int_pc = -(20 + device);
                 if (int_pc) {
                     save_state();
                     internal_state = control_state;
                     pc = int_pc;
                 }
             }
-    	}
-    }
+        } /* for (;;) body */
+    } /* for (;;) */
 }
 

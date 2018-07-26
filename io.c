@@ -9,10 +9,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int dbg = 0;		                    /* debug flag */
+static int dbg = 0;                         /* debug flag */
 
 static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
-static Byte go_device = DEVICE_INVALID;     /* no default GO device */
+static Byte go_device = DEV_CR0;            /* default GO device is the card reader */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
 int incomplete[memory_size];                /* mark cell used by I/O */
@@ -29,15 +29,15 @@ typedef enum {control, input, output} Operation;
 static struct {
     const enum DeviceType type;
     FILE *file;
-    long position;		/* used by random-access devices */
+    long position;        /* used by random-access devices */
   /*    const char *filename; */
     unsigned busy;              /* expiration time */
     Operation operation;
     Cell argument;
     Cell offset;
     Address buffer; 
-    Flag int_request;		/* request interrupt on completion */
-    Flag int_pending;		/* interrupt pending */
+    Flag int_request;        /* request interrupt on completion */
+    Flag int_pending;        /* interrupt pending */
 } devices[] = {
     {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, 
     {disk}, {disk}, {disk}, {disk}, {disk}, {disk}, {drum}, {drum}, 
@@ -118,7 +118,7 @@ static char *device_filename(Byte device)
     static char filename[FILENAME_MAX];
     if (device < 16)
         sprintf(filename, "%s%02d",
-	        attributes(device)->base_filename, device);
+            attributes(device)->base_filename, device);
     else
         strcpy(filename, attributes(device)->base_filename);
     return filename;
@@ -129,14 +129,16 @@ static void ensure_open(Byte device)
     if (num_devices <= device)
         error("Unknown device - %02o", device);
     if (!assigned_file(device)) {
-	if (attributes(device)->base_filename) {
-	    const char *filename = device_filename(device);
-	    if (!(devices[device].file = fopen(filename, "r+b"))
-		&& !(devices[device].file = fopen(filename, "w+b")))
-	        error("%s: %s", filename, strerror(errno));
-	    devices[device].position = 0;
-	} else
-	    error("No file assigned to device %02o (type %d)", device, devices[device].type);
+        if (attributes(device)->base_filename) {
+            const char *filename = device_filename(device);
+            const char *fam_read  = devices[device].type < card_in ? "r+b" : "r+t";
+            const char *fam_write = devices[device].type < card_in ? "w+b" : "w+t";
+            if (!(devices[device].file = fopen(filename, fam_read))
+                && !(devices[device].file = fopen(filename, fam_write)))
+                error("%s: %s", filename, strerror(errno));
+            devices[device].position = 0;
+        } else
+            error("No file assigned to device %02o (type %d)", device, devices[device].type);
     }
 }
 
@@ -294,9 +296,9 @@ static unsigned do_operation(Byte device, Operation operation,
     */
 
     if (devices[device].busy) {
-	/*
+    /*
         clocks = devices[device].busy;
-	*/
+    */
         clocks = 1;
         idle_time += clocks;
         do_scheduled_io(clocks);
@@ -354,6 +356,9 @@ static void no_out(unsigned device, Cell argument, Address buffer)
     error("Output not allowed for device %02o", device);
 }
 
+
+static void write_cell(Cell cell, FILE *outfile, Flag text);
+
 /* --- Text devices --- */
 
 /* Read a line from -file- into memory[buffer..buffer+size). 
@@ -365,22 +370,33 @@ static void read_line(FILE* file, Address buffer, unsigned size)
 {
     unsigned i, b;
     Flag past_end = false;
+
     for (i = 0; i < size; ++i) {
-	    Cell cell = zero;
-	    for (b = 1; b <= 5; ++b) {
-	        Byte mix_char;
-	        if (past_end)
-		        mix_char = (Byte) 0;
-	        else {
-		        int c = fgetc(file);
-		        if (c == '\n' || c == EOF)
-		            past_end = true, mix_char = (Byte) 0;
-		        else
-		            mix_char = C_char_to_mix((char) c);
-	        }
-	        cell = set_byte(mix_char, b, cell);
-	    }
-	    memory_store(buffer + i, cell);
+        Cell cell = zero;
+        for (b = 1; b <= 5; ++b) {
+            Byte mix_char;
+            if (past_end)
+                mix_char = (Byte) 0;
+            else {
+                int c = fgetc(file);
+                if (c == '\n' || c == EOF) {
+                    past_end = true, mix_char = (Byte) 0;
+                } else
+                    mix_char = C_char_to_mix((char) c);
+            }
+            cell = set_byte(mix_char, b, cell);
+        }
+        if (dbg) {
+            printf("read_line: %3d = ", buffer + i);
+            write_cell(cell, stdout, true);
+            printf("\n");
+        }
+        memory_store(buffer + i, cell);
+    }
+    if (false == past_end) {
+        int c = fgetc(file);
+        if (c != '\n' && c != EOF)
+            error("Line not terminated (%d)", c);
     }
 }
 
@@ -397,7 +413,7 @@ static void write_line(FILE *file, Address buffer, unsigned size, Flag text)
 {
     unsigned i;
     for (i = 0; i < size; ++i)
-	    write_cell(memory_fetch(buffer + i), file, text);
+        write_cell(memory_fetch(buffer + i), file, text);
     fputc('\n', file);
 }
 
@@ -408,42 +424,9 @@ static void printer_ioc(Byte device, Cell argument, Cell offset)
     fputc('\f', assigned_file(device));
 }
 
-/* 11-punch: ~JKLMNOPQR instead of 0123456789 */
-static int overpunched(Cell cell)
-{
-    Byte mix_char = get_byte(5, cell);
-    return (9 < mix_char) && (mix_char < 20);
-}
-
-static Cell flip_chars(Cell cell)
-{
-    int i;
-    Cell ret = zero;
-
-    for (i = 1; i <= 5; i++) {
-        Byte mix_char = get_byte(i, cell);
-        if ((29 < mix_char) && (mix_char < 40))
-            mix_char = mix_char - 20;
-	    ret = set_byte(mix_char, i, ret);
-    }
-    return ret;
-}
-
 static void text_in(Byte device, Cell argument, Address buffer)
 {
-    int i;
-
     read_line(assigned_file(device), buffer, block_size(device));
-    if (current_device_type == card_in) {
-        for (i = 0; i < 16; i += 2) {
-            Cell cell1 = memory_fetch(buffer + i    );
-            Cell cell2 = memory_fetch(buffer + i + 1);
-            if (overpunched(cell2)) {
-                memory_store(buffer + i    , flip_chars(cell1));
-                memory_store(buffer + i + 1, flip_chars(cell2));
-            }
-        }
-    }
 }
 
 static void text_out(Byte device, Cell argument, Address buffer)
@@ -464,9 +447,9 @@ static void set_file_position(Byte device, unsigned block, Flag writing)
         else {
             if (fseek(assigned_file(device),
                       (long) block * external_block_size(device),
-	    	      SEEK_SET))
+                  SEEK_SET))
                 error("Device %02o: %s", device, strerror(errno));
-  	        devices[device].position = (long) block;
+              devices[device].position = (long) block;
         }
     }
 }
@@ -487,23 +470,23 @@ static void read_block(Byte device, Address buffer)
     unsigned size = block_size(device);
     unsigned i, b;
     for (i = 0; i < size; ++i) {
-    	int c;
-    	Cell cell = zero;
-    	c = fgetc(file);
-    	if (c == EOF)
-    	    error("Unexpected EOF reading from device %02o", device);
-    	else if (c == '-')
-    	    cell = negative(cell);
+        int c;
+        Cell cell = zero;
+        c = fgetc(file);
+        if (c == EOF)
+            error("Unexpected EOF reading from device %02o", device);
+        else if (c == '-')
+            cell = negative(cell);
     
-    	for (b = 1; b <= 5; ++b) {
-    	    c = fgetc(file);
-    	    if (c == EOF)
-    		    error("Unexpected EOF reading from device %02o", device);
-    	    cell = set_byte(C_char_to_mix((char) c), b, cell);
-    	}
-    	memory_store(buffer + i, cell);
+        for (b = 1; b <= 5; ++b) {
+            c = fgetc(file);
+            if (c == EOF)
+                error("Unexpected EOF reading from device %02o", device);
+            cell = set_byte(C_char_to_mix((char) c), b, cell);
+        }
+        memory_store(buffer + i, cell);
     }
-    fgetc(file);			/* should be '\n' */
+    fgetc(file);            /* should be '\n' */
 }
 
 /* The inverse of read_block. */
@@ -529,18 +512,18 @@ static void tape_ioc(unsigned device, Cell argument, Cell offset)
             block_num = 0;
         else
             block_num = position - block_num;
-	set_file_position(device, block_num, false);
+        set_file_position(device, block_num, false);
     } else {
-	fd = assigned_file(device);
-	position = get_file_position(device);
-	while (block_num--) {
-	    set_file_position(device, ++position, false);
-	    c = fgetc(fd);
-	    if (c == EOF)
-	        break;
-	    if (ungetc(c, fd) == EOF)
-      	        error("Device %02o: %s", device, strerror(errno));
-	}
+        fd = assigned_file(device);
+        position = get_file_position(device);
+        while (block_num--) {
+            set_file_position(device, ++position, false);
+            c = fgetc(fd);
+            if (c == EOF)
+                break;
+            if (ungetc(c, fd) == EOF)
+                error("Device %02o: %s", device, strerror(errno));
+        }
     }
     devices[device].position = get_file_position(device);
 }
@@ -720,7 +703,7 @@ Flag io_pending_interrupt(Byte *int_device)
     enum DeviceType next_device_type;
 
     next_device_type = (enum DeviceType) (LAST_DEVICE_TYPE + 1);
-    next_device      = DEVICE_INVALID;
+    next_device      = DEV_XXX;
     for (device = 0; device < num_devices; device++) {
         if (devices[device].busy || false == devices[device].int_pending)
             continue;
@@ -730,7 +713,7 @@ Flag io_pending_interrupt(Byte *int_device)
             next_device = device;
         }
     }
-    if (DEVICE_INVALID != next_device) {
+    if (DEV_XXX != next_device) {
         devices[next_device].int_request = false;
         devices[next_device].int_pending = false;
         *int_device = next_device;

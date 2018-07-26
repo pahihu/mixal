@@ -4,7 +4,29 @@
 
 #include "mix.h"
 
-#define DEVICE_INVALID	((Byte) 255)
+
+/* --- Device numbers --- */
+#define DEV_MT0   ((Byte) 000)
+#define DEV_MT1   ((Byte) 001)
+#define DEV_MT2   ((Byte) 002)
+#define DEV_MT3   ((Byte) 003)
+#define DEV_MT4   ((Byte) 004)
+#define DEV_MT5   ((Byte) 005)
+#define DEV_MT6   ((Byte) 006)
+#define DEV_MT7   ((Byte) 007)
+#define DEV_DK0   ((Byte) 010)
+#define DEV_DK1   ((Byte) 011)
+#define DEV_DK2   ((Byte) 012)
+#define DEV_DK3   ((Byte) 013)
+#define DEV_DK4   ((Byte) 014)
+#define DEV_DK5   ((Byte) 015)
+#define DEV_DR0   ((Byte) 016)
+#define DEV_DR1   ((Byte) 017)
+#define DEV_CR0   ((Byte) 020)
+#define DEV_CP0   ((Byte) 021)
+#define DEV_LP0   ((Byte) 022)
+#define DEV_TT0   ((Byte) 023)
+#define DEV_XXX	  ((Byte) 255)
 
 extern unsigned long idle_time;             /* in Tyme units, waiting for I/O */
 
