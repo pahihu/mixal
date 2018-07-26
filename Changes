@@ -1,3 +1,6 @@
+180726
+  - run.c: silence GCC warnings
+  - io.c: fixed io_pending_interrupt()
 180725
 	- asm.c, main.c: punch object deck
 	- run.c: count XEQuted instruction time

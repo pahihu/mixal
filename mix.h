@@ -30,4 +30,6 @@ extern enum DeviceType current_device_type;
 
 #include "cell.h"
 
+#define IGNORE_VALUE(x)     (void)((x)+1)
+
 #endif

@@ -30,12 +30,11 @@ static void save_memory(const char *path, Cell *store, unsigned size)
 static void load_memory(const char *path, Cell *store, unsigned size)
 {
     FILE *fin;
-    size_t cells_read;
 
     fin = fopen(path, "rb");
     if (NULL == fin)
         return;
-    cells_read = fread(store, sizeof(Cell), size, fin);
+    fread(store, sizeof(Cell), size, fin);
     fclose(fin);
 }
 
@@ -722,6 +721,8 @@ void print_CPU_trace(Flag header)
     Byte I;
     Cell instruction;
     
+    IGNORE_VALUE(I);
+
     if (header) {
         printf ("  LOC FREQ INSTRUCTION OP    OPERAND   |  REGISTER A  REGISTER X  RI1   RI2   RI3   RI4   RI5   RI6   RJ   VCS   TYME\n");
         // printf ("+1000 0001 +1234567890 JBUS +1234567890| +1234567890 +1234567890 +0000 +0000 +0000 +0000 +0000 +0000 +1007 XEC 00014435\n");
@@ -760,6 +761,9 @@ static Cell effective_address(Address location)
     Address L;
     long N;
 
+    IGNORE_VALUE(CC);
+    IGNORE_VALUE(FF);
+
     H = zero; L = location; N = 0;
 A2:
     destructure_cell(safe_fetch(L), MM, II, FF, CC);
@@ -773,7 +777,7 @@ A2:
     }
 /* A3: */
     if (I1 == 7 || I2 == 7) {
-	elapsed_time++;
+        elapsed_time++;
         L = cell_to_address(E); goto A2;
     }
     else {
@@ -790,10 +794,10 @@ A2:
 static void xecute(Address address, Flag save_context)
 {
     Byte I;
-    Byte saved_C;
-    Byte saved_F;
-    Cell saved_M;
-    Address saved_pc;
+    Byte saved_C = 0;
+    Byte saved_F = 0;
+    Cell saved_M = zero;
+    Address saved_pc = 0;
 
     if (true == save_context) {
         saved_C = C;

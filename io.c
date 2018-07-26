@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static int dbg = 0;		            /* debug flag */
+static int dbg = 0;		                    /* debug flag */
 
 static int redirect_devices = 0;            /* stdin/stdout is card reader/printer*/
 static Byte go_device = DEVICE_INVALID;     /* no default GO device */
@@ -724,15 +724,15 @@ Flag io_pending_interrupt(Byte *int_device)
     for (device = 0; device < num_devices; device++) {
         if (devices[device].busy || false == devices[device].int_pending)
             continue;
-	/* select device by priority */
+        /* select device by priority */
         if (devices[device].type < next_device_type) {
             next_device_type = devices[device].type;
             next_device = device;
         }
     }
     if (DEVICE_INVALID != next_device) {
-        devices[device].int_request = false;
-        devices[device].int_pending = false;
+        devices[next_device].int_request = false;
+        devices[next_device].int_pending = false;
         *int_device = next_device;
         return true;
     }
