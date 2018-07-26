@@ -772,7 +772,7 @@ static const char* mnemonic(Byte C, Byte F)
 
 void print_CPU_trace(Flag header)
 {
-    Byte I;
+    Byte I = 0;
     Cell instruction;
     
     IGNORE_VALUE(I);
@@ -808,7 +808,7 @@ void print_CPU_trace(Flag header)
 
 static Cell effective_address(Address location)
 {
-    Byte II, I1, I2, CC, FF;
+    Byte II, I1, I2, CC = 0, FF = 0;
     Cell MM;
 
     Cell E, H;
@@ -910,9 +910,9 @@ void run(void)
         M = 0; F = io_go_device(); C = 36;
         op_table[C].action();
         io_finish();
+        pc = 0;
     }
 
-    pc = 0;
     if (trace_count)
         print_CPU_trace(true);
     for (;;) {

@@ -205,6 +205,7 @@ int main(int argc, char **argv)
                     int ch = argv[i][j];
                     if (ch == 0 || ch == '.')
                         break;
+                    title[j] = toupper(ch);
                 }
                 title[j] = '\0';
                 assemble_file(argv[i]);
