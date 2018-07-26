@@ -70,10 +70,6 @@ Cell sub(Cell x, Cell y);
 void multiply(Cell x, Cell y, Cell *high_word, Cell *low_word);
 Cell mul(Cell x, Cell y);
 
-Cell logical_sum(Cell x, Cell y);
-Cell logical_difference(Cell x, Cell y);
-Cell logical_product(Cell x, Cell y);
-
 void divide(Cell n1, Cell n0, Cell d, Cell *quotient, Cell *remainder);
 Cell slash(Cell x, Cell y);     /* the name 'div' is taken... */
 
@@ -83,15 +79,27 @@ void shift_left_circular(Cell A, Cell X, unsigned count, Cell *pA, Cell *pX);
 void shift_left_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
 void shift_right_binary(Cell A, Cell X, unsigned long count, Cell *pA, Cell *pX);
 
+Cell logical_sum(Cell x, Cell y);
+Cell logical_difference(Cell x, Cell y);
+Cell logical_product(Cell x, Cell y);
+
+Cell float_add(Cell x, Cell y);
+Cell float_subtract(Cell x, Cell y);
+Cell float_multiply(Cell x, Cell y);
+Cell float_divide(Cell x, Cell y);
+Cell float_flot(Cell x);
+Cell float_fix(Cell x);
+int  float_compare(Cell x, Cell y);
+
 /* Break a cell into its component fields. */
 #define destructure_cell(cell, A, I, F, C)  \
     do {                                    \
-	Cell temp_ = (cell);                \
-	Cell sign_ = sign_bit(temp_);       \
-	C = temp_ & 63;                     \
-	F = (temp_ >>= 6) & 63;             \
-	I = (temp_ >>= 6) & 63;             \
-	A = sign_ | (4095 & (temp_ >> 6));  \
+    Cell temp_ = (cell);                \
+    Cell sign_ = sign_bit(temp_);       \
+    C = temp_ & 63;                     \
+    F = (temp_ >>= 6) & 63;             \
+    I = (temp_ >>= 6) & 63;             \
+    A = sign_ | (4095 & (temp_ >> 6));  \
     } while (0)
 
 /* --- Printable representation --- */

@@ -327,3 +327,49 @@ Address cell_to_address(Cell cell)
     }
     return (Address) magnitude(cell);
 }
+
+/* --- Floating point operations --- */
+
+Cell float_add(Cell x, Cell y)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+Cell float_subtract(Cell x, Cell y)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+Cell float_multiply(Cell x, Cell y)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+Cell float_divide(Cell x, Cell y)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+Cell float_flot(Cell x)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+Cell float_fix(Cell x)
+{
+    error("Not implemented yet!");
+    return zero;
+}
+
+int float_compare(Cell x, Cell y)
+{
+    error("Not implemented yet!");
+    return 0;
+}
+
+
