@@ -18,16 +18,21 @@
 #-----------------------------
 nop	00	0
 add	01
-or	01	7
+fadd    01      6       x
 sub	02
-xor	02	7
+fsub    02      6       x
 mul	03
-and	03	7
+fmul    03      6       x
 div	04
+fdiv    04      6       x
 num	05	0	x
 char	05	1	x
 hlt	05	2	x
-int     05      7       x
+and	05	3       x
+or	05	4       x
+xor	05	5       x
+flot    05      6       x
+fix     05      7       x
 neg	05	8	x
 xch	05	9	x
 xeq     05     10	x
@@ -39,6 +44,7 @@ slc	06	4	x
 src	06	5	x
 slb	06	6	x
 srb	06	7	x
+int     06      9       x
 move	07	1
 ld-	08
 ld-n	16
@@ -72,8 +78,9 @@ inc-	48	0	x
 dec-	48	1	x
 ent-	48	2	x
 enn-	48	3	x
-cp-m	48	4
+cp-m	48	4       x
 cmp-	56
+fcmp    56      6       x
 orig	x
 equ	x
 alf	x
