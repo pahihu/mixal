@@ -22,9 +22,9 @@ void asm_store_field(Address address, unsigned L, unsigned R, Cell cell)
 {
     // assert(address < memory_size);
     if (VERBOSE) {
-	    char temp[12];
-	    unparse_cell(temp, cell);
-	    printf("%4o(%u,%u): %s\n", address, L, R, temp);
+        char temp[12];
+        unparse_cell(temp, cell);
+        printf("%4o(%u,%u): %s\n", address, L, R, temp);
     }
     memory_store(address, set_field(cell, make_field_spec(L, R), memory_fetch(address)));
 }
@@ -95,12 +95,17 @@ void punch_object(const char *title)
 {
     FILE *card_out;
     Address address;
+    Cell cell;
 
     card_out = fopen("punch", "w+");
     if (NULL == card_out)
         error("Cannot open card puncher");
-    for (address = 100; address < memory_size; address += 7) {
-        punch_card(card_out, title, address);
+    for (address = 100; address < memory_size; address++) {
+        cell = memory_fetch(address);
+        if (magnitude(cell)) {
+            punch_card(card_out, title, address);
+            address += 6;
+        }
     }
     fprintf(card_out, "TRANS0%04d", abs(entry_point));
     fflush(card_out);
