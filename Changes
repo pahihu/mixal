@@ -1,4 +1,6 @@
 180726
+  - main.c: set object deck title
+  - run.c: reset PC only when GO button is pressed
   - main.c, io.c, run.c: fixed GO button, text encoding on Windows, MOVE instruction
   - opcodes: added floating point opcodes, different encoding for AND, OR, XOR, INT
   - cell.c: floating point operation stubs

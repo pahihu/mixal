@@ -13,10 +13,14 @@ Changes:
   * instruction execution trace
   * memory dump of non-zero locations, with instruction frequency counts
   * limited size of drum and tape devices
-  * interrupt facility
-  * real-time clock
-  * UT-MIX instructions added: OR, XOR, AND, NEG, XCH, SLB, SRB, JrE, JrO
-  * UT-MIX indirect addressing
+  * interrupt facility, real-time clock (INT instruction)
+  * binary instructions: OR, XOR, AND, SLB, SRB, JrE, JrO
+  * UT-MIX instructions added: NEG, XCH
+  * indirect addressing
+  * Mixmaster instructions added: XEQ (execute), CPrM (CI = reg:M)
+  * GO button
+  * punch object card deck
+  * core memory support (non-volatile memory)
 
 **NOTE**: execution trace and memory dump mechanics loosely 
 follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, UT Austin, Jan, 1977. Good luck!
