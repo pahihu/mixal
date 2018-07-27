@@ -539,15 +539,13 @@ static void do_move(void)
 {
     Address from = cell_to_address(M);
     Address to = cell_to_address(r[1]);
-    unsigned count = F;
-    for (; count != 0; --count) {
-        // if (memory_size <= from + count || memory_size <= to + count)
-            // error("Address out of range");
-        // memory[to + count] = memory[from + count];
-        safe_store(to + count, safe_fetch(from + count));
+    unsigned i, count = F;
+
+    for (i = count; i != 0; --i) {
+        safe_store(to + i, safe_fetch(from + i));
         elapsed_time += 2;
     }
-    r[1] = address_to_cell(to + F);
+    r[1] = address_to_cell(to + count);
 }
 
 static void do_lda(void)    { r[A] = get_V(); }

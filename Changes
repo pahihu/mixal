@@ -1,31 +1,36 @@
+180727
+        - io.c: fixed MIX binary I/O, file access modes
+
 180726
-  - main.c: set object deck title
-  - run.c: reset PC only when GO button is pressed
-  - main.c, io.c, run.c: fixed GO button, text encoding on Windows, MOVE instruction
-  - opcodes: added floating point opcodes, different encoding for AND, OR, XOR, INT
-  - cell.c: floating point operation stubs
-  - asm.c: punch_object searches for not empty cells
-  - run.c: silence GCC warnings
-  - io.c: fixed io_pending_interrupt()
+        - main.c: set object deck title
+        - run.c: reset PC only when GO button is pressed
+        - main.c, io.c, run.c: fixed GO button, text encoding on Windows, MOVE instruction
+        - opcodes: added floating point opcodes, different encoding for AND, OR, XOR, INT
+        - cell.c: floating point operation stubs
+        - asm.c: punch_object searches for not empty cells
+        - run.c: silence GCC warnings
+        - io.c: fixed io_pending_interrupt()
+
 180725
-	- asm.c, main.c: punch object deck
-	- run.c: count XEQuted instruction time
-	- run.c, io.c: added wait state, interrupts are serviced by priority
-	- mix.h: device types are reordered by priority
-	- main.c: added '-e' flag to set entry point, '-c' for core memory
-	- mixref.pdf: CP-M, XEQ instruction added
-	- run.c: added CP-M, XEQ, check configuration flags
-	- io.c: interrupt facility flag removed
-	- main.c: usage, mix_config flags
+        - asm.c, main.c: punch object deck
+        - run.c: count XEQuted instruction time
+        - run.c, io.c: added wait state, interrupts are serviced by priority
+        - mix.h: device types are reordered by priority
+        - main.c: added '-e' flag to set entry point, '-c' for core memory
+        - mixref.pdf: CP-M, XEQ instruction added
+        - run.c: added CP-M, XEQ, check configuration flags
+        - io.c: interrupt facility flag removed
+        - main.c: usage, mix_config flags
+
 180718
-	- run.c: CPU trace, status display fixed, indirect addressing
-	- mixref.pdf: JrE, JrO, NEG, XCH, SLB, SRB, OR, XOR, AND added
-	- opcodes, cell.c, run.c: several UT-MIX extensions added
+        - run.c: CPU trace, status display fixed, indirect addressing
+        - mixref.pdf: JrE, JrO, NEG, XCH, SLB, SRB, OR, XOR, AND added
+        - opcodes, cell.c, run.c: several UT-MIX extensions added
 
 180717
-	- mixref.pdf: INT instruction added
-	- io.c, main.c, opcodes, run.c: interrupt facility added
-	- io.c: bad busy time condition fixed
+        - mixref.pdf: INT instruction added
+        - io.c, main.c, opcodes, run.c: interrupt facility added
+        - io.c: bad busy time condition fixed
 
 180124AP
         - io.c: tape IOC time calculation
