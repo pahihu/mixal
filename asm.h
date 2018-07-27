@@ -16,6 +16,4 @@ void set_entry_point(Address address);
 
 void assemble(Cell cell);
 
-void punch_object(const char *title);
-
 #endif

@@ -1,102 +1,100 @@
-     aaaaa          aaaaa               aaaaa                    aaaaa                         aaaaa                    
-          aaaaa                                   aaaaa                                        aaaaa                    
-                         aaaaa                                                  aaaaa                                   
-                    aaaaa                                                            aaaaa                              
-                                   aaaaa                                                                      aaaaa     
-                                                                      aaaaa                                             
-                                   aaaaa                                                                                
-     aaaaa                                                                                          aaaaa               
-                                                                                aaaaa                                   
-                                                                 aaaaa                                                  
-                                                       aaaaa                                                            
-                                                  aaaaa                                                                 
-                                                  aaaaa                                                                 
-                                                       aaaaa                                                            
-                                                                 aaaaa                                                  
-                                                                                aaaaa                                   
-                                                                                                    aaaaa               
+     AAAAA          AAAAA               AAAAA                    AAAAA                         AAAAA                    
+          AAAAA                                   AAAAA                                        AAAAA                    
+                         AAAAA                                                  AAAAA                                   
+                    AAAAA                                                            AAAAA                              
+                                   AAAAA                                                                      AAAAA     
+                                                                      AAAAA                                             
+                                   AAAAA                                                                                
+     AAAAA                                                                                          AAAAA               
+                                                                                AAAAA                                   
+                                                                 AAAAA                                                  
+                                                       AAAAA                                                            
+                                                  AAAAA                                                                 
+                                                  AAAAA                                                                 
+                                                       AAAAA                                                            
+                                                                 AAAAA                                                  
+                                                                                AAAAA                                   
+                                                                                                    AAAAA               
                                                                                                                         
-     aaaaa                                                                                                              
-                                   aaaaa                                                                                
-                                                                      aaaaa                                             
-                                                                                                              aaaaa     
+     AAAAA                                                                                                              
+                                   AAAAA                                                                                
+                                                                      AAAAA                                             
+                                                                                                              AAAAA     
                                                                                                                         
-                                   aaaaa                                                                                
-                                                                                     aaaaa                              
+                                   AAAAA                                                                                
+                                                                                     AAAAA                              
                                                                                                                         
-                    aaaaa                                                                                               
-                                                                                aaaaa                                   
+                    AAAAA                                                                                               
+                                                                                AAAAA                                   
                                                                                                                         
-                         aaaaa                                                                                          
-                                                                                               aaaaa                    
+                         AAAAA                                                                                          
+                                                                                               AAAAA                    
                                                                                                                         
-                                                  aaaaa                                                                 
+                                                  AAAAA                                                                 
                                                                                                                         
-          aaaaa                                                                                                         
-                                                                                               aaaaa                    
+          AAAAA                                                                                                         
+                                                                                               AAAAA                    
                                                                                                                         
-                                                                 aaaaa                                                  
+                                                                 AAAAA                                                  
                                                                                                                         
-                                        aaaaa                                                                           
+                                        AAAAA                                                                           
                                                                                                                         
-                    aaaaa                                                                                               
+                    AAAAA                                                                                               
                                                                                                                         
-     aaaaa                                                                                                              
-                                                                                                                   aaaaa
+     AAAAA                                                                                                              
+                                                                                                                   AAAAA
                                                                                                                         
-                                                                                                              aaaaa     
+                                                                                                              AAAAA     
                                                                                                                         
-                                                                                                              aaaaa     
+                                                                                                              AAAAA     
                                                                                                                         
-                                                                                                                   aaaaa
-                                                                                                                        
-                                                                                                                        
-     aaaaa                                                                                                              
-                                                                                                                        
-                    aaaaa                                                                                               
-                                                                                                                        
-                                        aaaaa                                                                           
-                                                                                                                        
-                                                                 aaaaa                                                  
-                                                                                                                        
-                                                                                               aaaaa                    
+                                                                                                                   AAAAA
                                                                                                                         
                                                                                                                         
-          aaaaa                                                                                                         
+     AAAAA                                                                                                              
                                                                                                                         
-                                                  aaaaa                                                                 
+                    AAAAA                                                                                               
                                                                                                                         
-                                                                                               aaaaa                    
+                                        AAAAA                                                                           
                                                                                                                         
+                                                                 AAAAA                                                  
                                                                                                                         
-                         aaaaa                                                                                          
-                                                                                                                        
-                                                                                aaaaa                                   
-                                                                                                                        
-                                                                                                                        
-                    aaaaa                                                                                               
-                                                                                                                        
-                                                                                     aaaaa                              
+                                                                                               AAAAA                    
                                                                                                                         
                                                                                                                         
-                                   aaaaa                                                                                
+          AAAAA                                                                                                         
                                                                                                                         
-                                                                                                              aaaaa     
+                                                  AAAAA                                                                 
                                                                                                                         
-                                                                                                                        
-                                                                      aaaaa                                             
-                                                                                                                        
-                                                                                                                        
-                                   aaaaa                                                                                
+                                                                                               AAAAA                    
                                                                                                                         
                                                                                                                         
-     aaaaa                                                                                                              
+                         AAAAA                                                                                          
                                                                                                                         
-                                                                                                    aaaaa               
-                                                                                                                        
-                                                                                                                        
-                                                                                aaaaa                                   
+                                                                                AAAAA                                   
                                                                                                                         
                                                                                                                         
-A: 0000000000	I1: 0113  I2:-0000  I3: 0000  I4: 0000  I5: 0000  I6: 0000  
-X: 0101010101	 J: 5711  PC: 5712  Flags: equal                  14772 elapsed
+                    AAAAA                                                                                               
+                                                                                                                        
+                                                                                     AAAAA                              
+                                                                                                                        
+                                                                                                                        
+                                   AAAAA                                                                                
+                                                                                                                        
+                                                                                                              AAAAA     
+                                                                                                                        
+                                                                                                                        
+                                                                      AAAAA                                             
+                                                                                                                        
+                                                                                                                        
+                                   AAAAA                                                                                
+                                                                                                                        
+                                                                                                                        
+     AAAAA                                                                                                              
+                                                                                                                        
+                                                                                                    AAAAA               
+                                                                                                                        
+                                                                                                                        
+                                                                                AAAAA                                   
+                                                                                                                        
+                                                                                                                        

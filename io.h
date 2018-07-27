@@ -31,6 +31,8 @@
 extern unsigned long idle_time;             /* in Tyme units, waiting for I/O */
 
 void io_init(void);
+void io_shutdown(void);
+
 unsigned io_control(Byte device, Cell argument, Cell offset);   /* returns idle clocks */
 unsigned do_input(Byte device, Cell argument, Address buffer);
 unsigned do_output(Byte device, Cell argument, Address buffer);
@@ -42,8 +44,10 @@ Flag io_device_busy(Byte device);           /* true if device busy */
 Flag io_scheduled(void);                    /* true if has scheduled I/O in the future */
 typedef enum {read_access, write_access} Access;
 Flag io_incomplete(Address address, Access access); /* true if incomplete I/O operation affects the address */
-unsigned io_finish(void);                   /* wait for outstanding I/O to complete, return time spent */
+unsigned io_complete(void);                 /* wait for outstanding I/O to complete, return time spent */
 
 Flag io_pending_interrupt(Byte *device);    /* true if interrupt pending, device is the unit number */
+
+void punch_object_deck(const char *title, Address start_address);
 
 #endif

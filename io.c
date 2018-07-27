@@ -25,6 +25,16 @@ int control_incomplete[memory_size];        /* mark cell used by I/O */
 enum DeviceType current_device_type;
 typedef enum {control, input, output} Operation;
 
+#ifdef WIN32
+#define	TXT_APPEND   "at"
+#define	TXT_RDONLY   "rt"
+#else
+#define	TXT_APPEND   "at"
+#define	TXT_RDONLY   "rt"
+#endif
+#define	BIN_RWRITE   "r+b"
+#define	BIN_CREATE   "w+b"
+
 /* The device table: */
 static struct {
     const enum DeviceType type;
@@ -63,6 +73,7 @@ static IOCHandler tape_ioc, disk_ioc, no_ioc, printer_ioc;
 /*** need to distinguish read/write permission... */
 static const struct Device_attributes {
     const char *base_filename;
+    const char *fam;
     unsigned  size;
     unsigned block_size;
     IOHandler *in_handler;
@@ -72,13 +83,13 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* drum */      { "drum",     64, 100, disk_in, disk_out, disk_ioc,        4750,    0}, /* B430 */
-/* disk */      { "disk",   4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
-/* tape */      { "tape",   7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
-/* card_in */   { "reader",    0,  16, text_in, no_out,   no_ioc,        150000,    0}, /* B122 */
-/* card_out */  { "punch",     0,  16, no_in,   text_out, no_ioc,        300000,    0}, /* B303 */
-/* printer */   { "printer",   0,  24, no_in,   text_out, printer_ioc,    63158, 2500}, /* B320 */
-/* console */   { NULL,        0,  14, console_in, console_out, no_ioc, 3500000,    0}  /* ASR33 */
+/* drum */      { "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,        4750,    0}, /* B430 */
+/* disk */      { "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
+/* tape */      { "tape",   BIN_RWRITE, 7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
+/* card_in */   { "reader", TXT_RDONLY,    0,  16, text_in, no_out,   no_ioc,        150000,    0}, /* B122 */
+/* card_out */  { "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,        300000,    0}, /* B303 */
+/* printer */   { "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,    63158, 2500}, /* B320 */
+/* console */   { NULL,           NULL,    0,  14, console_in, console_out, no_ioc, 3500000,    0}  /* ASR33 */
 
 };
 
@@ -131,11 +142,13 @@ static void ensure_open(Byte device)
     if (!assigned_file(device)) {
         if (attributes(device)->base_filename) {
             const char *filename = device_filename(device);
-            const char *fam_read  = devices[device].type < card_in ? "r+b" : "r+t";
-            const char *fam_write = devices[device].type < card_in ? "w+b" : "w+t";
-            if (!(devices[device].file = fopen(filename, fam_read))
-                && !(devices[device].file = fopen(filename, fam_write)))
-                error("%s: %s", filename, strerror(errno));
+            const char *fam = attributes(device)->fam;
+            if (!(devices[device].file = fopen(filename, fam))) {
+                if (!strcmp(fam, BIN_RWRITE))
+                    devices[device].file = fopen(filename, BIN_CREATE);
+                if (!devices[device].file)
+                    error("Cannot open device file %s: %s", filename, strerror(errno));
+            }
             devices[device].position = 0;
         } else
             error("No file assigned to device %02o (type %d)", device, devices[device].type);
@@ -403,10 +416,16 @@ static void read_line(FILE* file, Address buffer, unsigned size)
 static void write_cell(Cell cell, FILE *outfile, Flag text)
 {
     unsigned i;
-    if (!text)
-        fputc(is_negative(cell) ? '-' : ' ', outfile);
+
+    if (text) {
+        for (i = 1; i <= 5; ++i)
+            fputc(mix_to_C_char(get_byte(i, cell)), outfile);
+        return;
+    }
+
+    fputc(is_negative(cell) ? '-' : ' ', outfile);
     for (i = 1; i <= 5; ++i)
-        fputc(mix_to_C_char(get_byte(i, cell)), outfile);
+        fputc(get_byte(i, cell), outfile);
 }
 
 static void write_line(FILE *file, Address buffer, unsigned size, Flag text)
@@ -469,8 +488,9 @@ static void read_block(Byte device, Address buffer)
     FILE *file = assigned_file(device);
     unsigned size = block_size(device);
     unsigned i, b;
+    int c;
+
     for (i = 0; i < size; ++i) {
-        int c;
         Cell cell = zero;
         c = fgetc(file);
         if (c == EOF)
@@ -482,11 +502,12 @@ static void read_block(Byte device, Address buffer)
             c = fgetc(file);
             if (c == EOF)
                 error("Unexpected EOF reading from device %02o", device);
-            cell = set_byte(C_char_to_mix((char) c), b, cell);
+            cell = set_byte(C_int_to_mix(c), b, cell);
         }
         memory_store(buffer + i, cell);
     }
-    fgetc(file);            /* should be '\n' */
+    c = fgetc(file);            /* should be '\n' */
+    assert(c == '\n');
 }
 
 /* The inverse of read_block. */
@@ -664,15 +685,28 @@ void io_init(void)
     }
 }
 
-unsigned io_finish(void)
+unsigned io_complete(void)
 {
     unsigned clocks = 0;
+
     while (next_scheduled_io) {
         do_scheduled_io(1);
         clocks++;
         idle_time++;
     }
     return clocks;
+}
+
+void io_shutdown(void)
+{
+    Byte device;
+
+    for (device = 0; device < num_devices; device++) {
+        if (devices[device].file) {
+            fclose(devices[device].file);
+            devices[device].file = NULL;
+        }
+    }
 }
 
 /* --- I/O incomplete support --- */
@@ -722,4 +756,67 @@ Flag io_pending_interrupt(Byte *int_device)
     return false;
 }
 
+/* --- Punch object card deck --- */
 
+static void punch_card(FILE *fdev, const char *title, Address address)
+{
+    static char overpunch[] = "~JKLMNOPQR";
+    int i, numwords;
+    char buf[16];
+    Cell cell;
+
+    numwords = 0;
+    for (i = 0; i < 7; i++) {
+        if (memory_size <= address + i)
+            break;
+        cell = memory_fetch(address + i);
+        if (magnitude(cell)) {
+            numwords = i + 1;
+        }
+    }
+
+    if (0 == numwords)
+        return;
+
+    fprintf(fdev, "%-5s%1d%04d", title, numwords, address);
+    for (i = 0; i < numwords; i++) {
+        if (memory_size <= address + i)
+            break;
+        cell = memory_fetch(address + i);
+        sprintf(buf, "%010ld", magnitude(cell));
+        if (is_negative(cell))
+            buf[9] = overpunch[buf[9]-'0'];
+        fprintf(fdev, "%s", buf);
+    }
+
+    for (i = numwords; i < 7; i++)
+        fprintf(fdev, "          ");
+
+    fprintf(fdev, "\n");
+}
+
+void punch_object_deck(const char *title, Address start_address)
+{
+    FILE *card_punch;
+    Address address;
+    Cell cell;
+    unsigned num_cards;
+
+    card_punch = fopen(methods[card_out].base_filename, methods[card_out].fam);
+    if (NULL == card_punch)
+        error("Cannot open card puncher");
+    num_cards = 0;
+    for (address = 100; address < memory_size; address++) {
+        cell = memory_fetch(address);
+        if (magnitude(cell)) {
+            punch_card(card_punch, title, address);
+            num_cards++;
+            address += 6;
+        }
+    }
+    if (num_cards) {
+        fprintf(card_punch, "TRANS0%04d", abs(start_address));
+        fflush(card_punch);
+    }
+    fclose(card_punch);
+}

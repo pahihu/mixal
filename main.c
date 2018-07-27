@@ -29,10 +29,13 @@ void fatal_error(const char *message, ...)
         fprintf(stderr, "FATAL ERROR (%s, line %u): ", current_file, line_number);
     else
         fprintf(stderr, "FATAL ERROR: ");
+
     va_start(args, message);
     vfprintf(stderr, message, args);
     va_end(args);
     fprintf(stderr, "\n");
+
+    io_shutdown();
     exit(1);
 }
 
@@ -46,10 +49,11 @@ void install_error_handler(void (*handler)(const char *, va_list))
 void error(const char *message, ...)
 {
     va_list args;
+
     ++num_errors;
     va_start(args, message);
     if (error_handler)
-    error_handler(message, args);
+        error_handler(message, args);
     else
         fatal_error("No error handler installed");
     va_end(args);
@@ -58,10 +62,11 @@ void error(const char *message, ...)
 void warn(const char *message, ...)
 {
     va_list args;
+
     if (current_file)
-    fprintf(stderr, "WARNING (%s, line %u): ", current_file, line_number);
+        fprintf(stderr, "WARNING (%s, line %u): ", current_file, line_number);
     else
-    fprintf(stderr, "WARNING: ");
+        fprintf(stderr, "WARNING: ");
     va_start(args, message);
     vfprintf(stderr, message, args);
     va_end(args);
@@ -73,13 +78,13 @@ void warn(const char *message, ...)
 static FILE *open_file(const char *filename, const char *mode)
 {
     if (strcmp(filename, "-") == 0) {
-    assert(mode[0] == 'r' || mode[0] == 'w');
-    return mode[0] == 'w' ? stdout : stdin;
+        assert(mode[0] == 'r' || mode[0] == 'w');
+        return mode[0] == 'w' ? stdout : stdin;
     } else {
-    FILE *result = fopen(filename, mode);
-    if (!result)
-        fatal_error("%s: %s", filename, strerror(errno));
-    return result;
+        FILE *result = fopen(filename, mode);
+        if (!result)
+            fatal_error("%s: %s", filename, strerror(errno));
+        return result;
     }
 }
 
@@ -88,9 +93,9 @@ static FILE *open_file(const char *filename, const char *mode)
 static void assembler_error(const char *message, va_list args)
 {
     if (current_file)
-    fprintf(stderr, "ERROR (%s, line %u): ", current_file, line_number);
+        fprintf(stderr, "ERROR (%s, line %u): ", current_file, line_number);
     else
-    fprintf(stderr, "ERROR: ");
+        fprintf(stderr, "ERROR: ");
     vfprintf(stderr, message, args);
     fprintf(stderr, "\n");
 }
@@ -99,21 +104,22 @@ static void assemble_file(const char *filename)
 {
     FILE *infile = open_file(filename, "r");
     char line[257];
+
     current_file = filename, line_number = 0;
     while (fgets(line, sizeof line, infile)) {
-    ++line_number;
-    assemble_line(line);
-    if (line[strlen(line) - 1] != '\n') {
-        if (!fgets(line, sizeof line, infile))
-            break;        /* the file's last line had no '\n' */
-        else {
-            error("Line length exceeds 256 characters");
-        /* Skip the rest of the line */
-        while (line[strlen(line) - 1] != '\n')
+        ++line_number;
+        assemble_line(line);
+        if (line[strlen(line) - 1] != '\n') {
             if (!fgets(line, sizeof line, infile))
-                break;
+                break;        /* the file's last line had no '\n' */
+            else {
+                error("Line length exceeds 256 characters");
+                /* Skip the rest of the line */
+                while (line[strlen(line) - 1] != '\n')
+                    if (!fgets(line, sizeof line, infile))
+                        break;
+            }
         }
-    }
     }
     if (ferror(infile))
         error("%s: %s", filename, strerror(errno));
@@ -151,7 +157,7 @@ int main(int argc, char **argv)
     strcpy(title, "OBJS");
     install_error_handler(assembler_error);
     if (argc == 1)
-    assemble_file("-");
+        assemble_file("-");
     else {
         int i, j;
         unsigned flags;
@@ -221,7 +227,7 @@ int main(int argc, char **argv)
 
     /* --- Punch object deck --- */
     if (punch)
-        punch_object(title);
+        punch_object_deck(title, entry_point);
 
     /* Now run it: */
     set_initial_state();

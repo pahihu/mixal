@@ -435,7 +435,7 @@ static void do_special(void)
         break;
     }
     case 2: /* HLT */
-        elapsed_time += io_finish();
+        elapsed_time += io_complete();
         longjmp(escape_k, 1);
         break;
     case 3: /* AND */
@@ -909,7 +909,7 @@ void run(void)
     if (MIXCONFIG_PUSHGO & mix_config) {
         M = 0; F = io_go_device(); C = 36;
         op_table[C].action();
-        io_finish();
+        io_complete();
         pc = 0;
     }
 

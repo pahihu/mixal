@@ -4,5 +4,6 @@
 
 char mix_to_C_char(Byte mix_char);
 Byte C_char_to_mix(char c);
+Byte C_int_to_mix(int c);
 
 #endif
