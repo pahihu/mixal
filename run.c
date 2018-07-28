@@ -541,7 +541,7 @@ static void do_move(void)
     Address to = cell_to_address(r[1]);
     unsigned i, count = F;
 
-    for (i = count; i != 0; --i) {
+    for (i = 0; i < count; i++) {
         safe_store(to + i, safe_fetch(from + i));
         elapsed_time += 2;
     }

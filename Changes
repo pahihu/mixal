@@ -1,3 +1,5 @@
+180728
+	- run.c: fixed MOVE
 180727
         - io.c: fixed MIX binary I/O, file access modes
 
