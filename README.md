@@ -21,6 +21,7 @@ Changes:
   * GO button
   * punch object card deck
   * core memory support (non-volatile memory)
+  * assemble only
 
 **NOTE**: execution trace and memory dump mechanics loosely 
 follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, UT Austin, Jan, 1977. Good luck!

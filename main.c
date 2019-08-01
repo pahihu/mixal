@@ -131,6 +131,7 @@ static void usage()
 {
     fprintf(stderr, "  usage: mixal [options...] [source...]\n");
     fprintf(stderr, "options:\n");
+    fprintf(stderr, "         -a             assemble only\n");
     fprintf(stderr, "         -b             binary MIX installed\n");
     fprintf(stderr, "         -c             core memory: mixcore.dat, mixcore.ctl\n");
     fprintf(stderr, "         -d             dump non-zero memory locations\n");
@@ -149,7 +150,7 @@ static void usage()
 int main(int argc, char **argv)
 {
     char title[8];
-    Flag dump = false, punch = false;
+    Flag dump = false, punch = false, asm_only = false;
     
     precompute_field_data();
 
@@ -167,6 +168,7 @@ int main(int argc, char **argv)
         for (i = 1; i < argc; ++i) {
             if (*argv[i] == '-')
                 switch (argv[i][1]) {
+		case 'a': asm_only = true; break;
                 case 'b': flags += MIXCONFIG_BINARY; break;
                 case 'c': flags += MIXCONFIG_CORE; break;
                 case 'd': dump = true; break;
@@ -228,6 +230,10 @@ int main(int argc, char **argv)
     /* --- Punch object deck --- */
     if (punch)
         punch_object_deck(title, entry_point);
+
+    /* --- Check assemble only --- */
+    if (asm_only)
+        return 0;
 
     /* Now run it: */
     set_initial_state();
