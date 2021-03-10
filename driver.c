@@ -34,7 +34,7 @@ static void do_con(void)
 static void do_alf(void)
 {
     /* error("Use CON instead of ALF"); */
-    assemble(parse_W());
+    assemble(parse_S());
 }
 
 static void do_end(void)
@@ -134,6 +134,16 @@ static const char *skip_blanks(const char *s)
     return s + strspn(s, " \t");
 }
 
+static const char *skip_2blanks(const char *s)
+{
+    unsigned i;
+    for (i = 0; i < 2; i++) {
+        if (!isblank(s[i]))
+            break;
+    }
+    return s + i;
+}
+
 typedef const char *const_char_ptr;
 
 static void eat_identifier(char *buffer, const_char_ptr *s)
@@ -183,8 +193,13 @@ void assemble_line(const char *line)
     eat_identifier(label, &scan);       /* eat label if any */
     scan = skip_blanks(scan);
     eat_identifier(mnemonic, &scan);    /* eat mnemonic */
-    scan = skip_blanks(scan);
-    setup_scanner(scan);                /* prepare to parse operand field */
+    if (0 == strcasecmp(mnemonic, "alf")) {
+      scan = skip_2blanks(scan);
+      setup_scanner(scan, 0);
+    } else {
+      scan = skip_blanks(scan);
+      setup_scanner(scan, 1);           /* prepare to parse operand field */
+    }
 
     {
 	Handler handler = lookup_mnemonic(mnemonic);

@@ -6,11 +6,12 @@
 
 /* --- The scanner --- */
 
-void setup_scanner(const char *s);
+void setup_scanner(const char *s, int do_advance);
 
 /* --- The parser --- */
 
 Cell parse_operand(Flag F_must_be_default, Byte default_F);
+Cell parse_S(void);
 Cell parse_W(void);
 
 void done_parsing(void);

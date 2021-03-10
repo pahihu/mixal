@@ -7,25 +7,27 @@ uses the MIX machine.
 
 Changes:
 
-  * tape devices
-  * time dependent I/O (low-end Burroughs B5500 peripheral timing)
-  * card reader/punch and printer can use files instead of stdin/stdout
-  * reference card (see mixref.pdf)
-  * overlapping I/O buffer checks, incomplete I/O detection
-  * MinGW port
-  * count idle time waiting for I/O to complete
-  * instruction execution trace
-  * memory dump of non-zero locations, with instruction frequency counts
-  * limited size of drum and tape devices
-  * interrupt facility, real-time clock (INT instruction)
-  * binary instructions: OR, XOR, AND, SLB, SRB, JrE, JrO
-  * UT-MIX instructions added: NEG, XCH
-  * indirect addressing
-  * Mixmaster instructions added: XEQ (execute), CPrM (CI = reg:M)
-  * GO button
-  * punch object card deck
-  * core memory support (non-volatile memory)
+  * ALF statement without quotes
   * assemble only
+  * core memory support (non-volatile memory)
+  * punch object card deck
+  * GO button
+  * MIXmaster instructions added: XEQ (execute), CPrM (CI = reg:M)
+  * indirect addressing
+  * UT-MIX instructions added: NEG, XCH
+  * binary instructions: OR, XOR, AND, SLB, SRB, JrE, JrO
+  * interrupt facility, real-time clock (INT instruction)
+  * limited size of drum and tape devices
+  * memory dump of non-zero locations, with instruction frequency counts
+  * instruction execution trace
+  * count idle time waiting for I/O to complete
+  * MinGW port
+  * overlapping I/O buffer checks, incomplete I/O detection
+  * reference card (see mixref.pdf)
+  * card reader/punch and printer can use files instead of stdin/stdout
+  * time dependent I/O (low-end Burroughs B5500 peripheral timing)
+  * tape devices
+
 
 **NOTE**: execution trace and memory dump mechanics loosely 
 follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, UT Austin, Jan, 1977. Good luck!

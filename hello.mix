@@ -10,8 +10,8 @@ HELLO      OUT  MSG(PRINTER)
            HLT
 *
            ORIG MSG
-           ALF  "HELLO"
-           ALF  " WORL"
-           ALF  "D"
+           ALF  HELLO
+           ALF   WORL
+           ALF  D
            END  HELLO
 

@@ -73,7 +73,7 @@ static void advance(void)
 		{
 		    unsigned i;
 		    for (i = 0; i < length; ++i)
-			token_value = 
+			token_value =
 			  set_byte(C_char_to_mix(the_string[i]), i+1, token_value);
 		}
 	    }
@@ -81,6 +81,51 @@ static void advance(void)
 	}
     } else 
 	token = *the_string++;
+}
+
+static void advance_S(void)
+{
+    token = number;
+    token_value = zero;
+
+    if (the_string[0] == '\0') {
+        token = eos;
+	return;
+    } else if (the_string[0] == '"') {      /* a quoted string */
+	token = number;
+	token_value = zero;
+	++the_string;
+	{
+	    const char *end = strchr(the_string, '"');
+	    if (!end) {
+		error("Missing '\"'");
+		the_string += strlen (the_string);
+	    } else {
+		unsigned length = end - the_string;
+		if (5 < length) {
+		    warn("String doesn't fit in a machine word");
+		    length = 5;
+		}
+		{
+		    unsigned i;
+		    for (i = 0; i < length; ++i)
+			token_value =
+			  set_byte(C_char_to_mix(the_string[i]), i+1, token_value);
+		}
+	    }
+	    the_string = end + 1;
+	}
+    } else {    /* read max. 5 chars */
+        unsigned i;
+        for (i = 0; i < 5; i++) {
+            if (the_string[0] == '\0') {
+                token = eos;
+                break;
+            }
+	    token_value = set_byte(C_char_to_mix(the_string[0]), i+1, token_value);
+            the_string++;
+        }
+    }
 }
 
 static void expect(char expected_token)
@@ -92,10 +137,11 @@ static void expect(char expected_token)
     advance();
 }
 
-void setup_scanner(const char *s)
+void setup_scanner(const char *s, int do_advance)
 {
     the_string = s;
-    advance();
+    if (do_advance)
+        advance();
 }
 
 /* --- The parser for the operand field --- */
@@ -256,6 +302,16 @@ Cell parse_W(void)
 	    break;
 	advance();
     }
+    return result;
+}
+
+/* S ::= expr | chars */
+Cell parse_S(void)
+{
+    Cell result = zero;
+    advance_S();
+    result = token_value;
+    advance();
     return result;
 }
 

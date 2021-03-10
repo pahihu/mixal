@@ -1,5 +1,5 @@
 # empty punch
-rm -f punch
+rm -f punch printer
 
 # assemble hello.mix, punch object cards
 ./mixal -a -o hello.mix
