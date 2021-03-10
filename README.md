@@ -1,5 +1,9 @@
 # mixal
-Based on [MIXAL](http://github.com/darius/mixal) from Darius Bacon.
+Based on [MIXAL](http://github.com/darius/mixal) from Darius Bacon. 
+See `runhello` for example usage.
+
+You can check James L. Peterson's [Computer Organization and Assembly Language Programming](http://www.jklp.org/profession/books/mix/index.html) book, which
+uses the MIX machine.
 
 Changes:
 
