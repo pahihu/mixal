@@ -1,0 +1,1537 @@
+*
+*           PETERSON: MIXAL ASSEMBLER
+*           HTTP://WWW.JKLP.ORG/PROFESSION/BOOKS/MIX/C08.HTML
+*
+*
+TAPE        EQU  0                  TAPE UNIT NUMBER FOR LOADER
+CR          EQU  16                 INPUT CARD READER
+LP          EQU  18                 OUTPUT LINE PRINTER
+*
+MAXSYMBOL   EQU  250                MAXIMUM NUMBER OF SYMBOLS
+*
+*           TAPE BUFFER VARIABLES
+*
+BUF1        ORIG *+100              BUFFERS
+BUF2        ORIG *+100
+STOREBUF    CON  BUF1               POINTER TO BUFFER FOR STORING
+TAPEBUF     CON  BUF2               POINTER TO BUFFER FOR OUTPUT
+TAPEBUFPTR  CON  BUF1               CURRENT WORD POINTER
+TAPECNTR    CON  100                NUMBER OF WORDS LEFT
+*
+*
+*           SUBROUTINE FINISHBUF
+*
+*           LOADER WORDS TO BE WRITTEN TO TAPE FOR
+*           LOADING ARE STORED IN A BUFFER UNTIL 100
+*           WORDS ARE ACCUMULATED. THEN THIS ROUTINE
+*           IS CALLED TO DUMP THE BUFFER TO TAPE. DOUBLE
+*           BUFFERING IS USED.
+*
+FINISHBUF   STJ  FIBEXIT
+            ST1  FIBSAVE1(0:2)      SAVE REGISTERS
+            ST2  FIBSAVE2(0:2)
+*
+            LD1  STOREBUF           CURRENT BUFFER
+            OUT  0,1(TAPE)          WRITE BUFFER TO TAPE
+            LD2  TAPEBUF            SWITCH BUFFER POINTERS
+            ST2  STOREBUF
+            ST2  TAPEBUFPTR         AND RESET POINTER
+            ST1  TAPEBUF
+*
+FIBSAVE1    ENT1 *                  RESTORE REGISTERS
+FIBSAVE2    ENT2 *
+FIBEXIT     JMP  *
+*
+*
+*           SUBROUTINE TAPEOUT
+*
+*           THIS SUBROUTINE ACCEPTS ONE WORD TO BE
+*           WRITTEN TO THE TAPE FOR THE LOADER AND
+*           STORES IT IN THE BUFFER UNTIL THE BUFFER IS
+*           FULL. THEN IT CALLS FINISHBUF TO EMPTY
+*           THE BUFFER.
+*
+*           INPUT WORD IS IN THE A REGISTER
+*
+TAPEOUT     STJ  TOEXIT             SAVE REGISTERS
+            ST1  TOSAVE1(0:2)
+*
+            LD1  TAPEBUFPTR         NEXT WORD POINTER
+            STA  0,1                SAVE WORD
+            INC1 1
+            ST1  TAPEBUFPTR         UPDATE POINTER
+*
+            LD1  TAPECNTR           CHECK FOR FULL BUFFER
+            DEC1 1
+            J1P  STILLROOM
+            JMP  FINISHBUF          BUFFER FULL
+            ENT1 100                RESET COUNTER
+*
+STILLROOM   ST1  TAPECNTR           RESTORE COUNTER
+*
+TOSAVE1     ENT1 *
+TOEXIT      JMP  *
+*
+*
+*           LOADER BLOCK VARIABLES
+*
+BLCKLENGTH  CON  63                 LENGTH OF LDRBLOCK
+LDRBLOCK    ORIG *+64               BLOCK FOR LOADER RECORDS
+NXTLOADLOC  CON  0                  INDEX INTO LDRBLOCK
+*
+*           GENERATE
+*
+*           GENERATE A WORD OF LOADER OUTPUT.
+*           THE LOADER WORD IS IN VALUE. REGISTER I6 HAS
+*           THE ADDRESS OF THE LOCATION WHERE IT SHOULD
+*           BE LOADED. IF THIS WORD IS A CONTINUATION
+*           OF THE CURRENT BUFFER, IT IS SIMPLY STORED.
+*           IF THE WORD IS NONCONTIGUOUS OR FILLS THE
+*           BUFFER, THE BUFFER IS EMPTIED.
+*
+GNSAVEA     ORIG *+1
+*
+GENERATE    STJ  GENEXIT
+            STA  GNSAVEA
+            ST1  GNSAVE1(0:2)
+*
+            CMP6 NXTLOADLOC         CHECK IF CONTIGUOUS
+            JNE  FINISHBLCK         IF NOT, FINISH OLD BLOCK
+*
+            LD1  LDRBLOCK(4:5)      NUMBER OF WORDS
+            INC1 1
+            ST1  LDRBLOCK(4:5)
+*
+            LDA  VALUE
+            STA  LDRBLOCK,1         STORE GENERATED WORD
+*
+            INC6 1                  INCREASE LOCATION COUNTER
+            ST6  NXTLOADLOC
+*
+            CMP1 BLCKLENGTH         CHECK FOR END OF BLOCK
+            JGE  FINISHBLCK         IF SO, FINISH BLOCK
+            LDA  GNSAVEA
+GNSAVE1     ENT1 *                  RESTORE REGISTERS
+GENEXIT     JMP  *
+*
+*
+*           SUBROUTINE FINISHBLCK
+*
+*           OUTPUT TO THE LOADER THE BLOCK IN LDRBLOCK.
+*           NUMBER OF WORDS IS IN BYTE 4:5 OF FIRST WORD.
+*           (MAY BE ZERO, IN WHICH CASE IGNORE CALL).
+*           COMPUTE CHECKSUM AND OUTPUT IT TOO
+*
+CHECKSUM    ORIG *+1
+FLBSAVEA    ORIG *+1
+FINISHBLCK  STJ  FLBEXIT
+            STA  FLBSAVEA
+            ST1  FLBSAVE1(0:2)
+*
+            LD1  LDRBLOCK(4:5)
+            J1Z  FLBQUIT            IF BLOCK IS EMPTY
+*
+            STZ  CHECKSUM           INITIALIZE CHECKSUM
+            ENT1 0                  INDEX AND COUNTER
+*
+BLOCKOUT    LDA  LDRBLOCK,1
+            JMP  TAPEOUT            OUTPUT EACH WORD
+            ADD  CHECKSUM(1:5)
+            STA  CHECKSUM(1:5)      AND COMPUTE CHECKSUM
+*
+            INC1 1
+            CMP1 LDRBLOCK(4:5)      CHECK ALL WORD OUT
+            JLE  BLOCKOUT
+*
+            LDA  CHECKSUM(1:5)      OUTPUT CHECKSUM
+            JMP  TAPEOUT
+*
+            JOV  *+1                TURN OVERFLOW OFF (IF ON)
+*
+FLBQUIT     STZ  LDRBLOCK           NEW HEADER WORD
+            ST6  LDRBLOCK(0:2)
+*
+            LDA  FLBSAVEA           RESTORE REGISTERS
+FLBSAVE1    ENT1 *
+FLBEXIT     JMP  *
+*
+*
+INBUF       ORIG *+16
+CARD        ORIG *+80
+            ORIG *+10               CARD NUMBER
+CARDNUMBER  CON  0                  NUMBER OF CARDS READ
+*
+*
+*           SUBROUTINE CARDREAD
+*
+*           READ THE NEXT CARD FROM THE CARD READER AND
+*           UNPACK IT INTO THE CHARACTER ARRAY CARD. THE
+*           CARD IS READ INTO THE BUFFER INBUF AND WE
+*           TRY TO KEEP THE CARD READER BUSY BY THIS
+*           DOUBLE BUFFERING.
+*
+RCSAVEA     ORIG *+1
+*
+READCARD    STJ  RCEXIT
+            STA  RCSAVEA            SAVE REGISTERS
+            ST1  RCSAVE1(0:2)
+            ST2  RCSAVE2(0:2)
+            ST3  RCSAVE3(0:2)
+*
+            JBUS *(CR)              WAIT TILL CARD READ
+            ENT1 79                 79..0 CHARACTER COUNTER
+            ENT2 15                 15..0 WORD COUNTER
+*
+*           UNPACK CARD FROM RIGHT TO LEFT
+*
+NEXTWORD    LDA  INBUF,2
+            DEC2 1
+            ENT3 4                  4..0 NUMBER OF CHARACTERS
+*
+NEXTCHAR    STA  CARD,1(5:5)
+            DEC1 1
+            J1N  CARDDONE           IF ALL DONE
+            DEC3 1
+            J3N  NEXTWORD           OR NEW WORD NEEDED
+            SRA  1
+            JMP  NEXTCHAR           ELSE SHIFT AND CONTINUE
+*
+CARDDONE    IN   INBUF(CR)          START NEXT READ
+            LDA  CARDNUMBER
+            INCA 1                  INCREMENT NUMBER OF CARDS
+            STA  CARDNUMBER
+*
+            LDA  RCSAVEA            RESTORE REGISTERS
+RCSAVE1     ENT1 *
+RCSAVE2     ENT2 *
+RCSAVE3     ENT3 *
+RCEXIT      JMP  *
+*
+*
+SYM         ORIG *+2                SYMBOL
+LETTER      ORIG *+1                NUMERIC=ZERO
+*
+*
+*           SUBROUTINE GETSYM
+*
+*           GET THE NEXT SYMBOL FROM CARD(I5) AND PACK
+*           IT INTO SYM UNTIL A DELIMITER. I5 WILL BE
+*           MOVED TO POINT TO THE DELIMITER. LETTER IS
+*           ZERO IF NO LETTER FOUND.
+*
+GSSAVEA     ORIG *+1
+GSSAVEX     ORIG *+1
+*
+GETSYM      STJ  GSEXIT             SAVE REGISTERS
+            STA  GSSAVEA
+            STX  GSSAVEX
+            ST1  GSSAVE1(0:2)
+            ST2  GSSAVE2(0:2)
+*
+            ENT1 10                 MAXIMUM NUMBER OF CHARACTERS
+            STZ  LETTER
+            ENTX 0
+            ENTA 0                  BLANK AX
+*
+SCANSYM     LD2  CARD,5
+            CMP2 CHARA(5:5)         MUST BE AT LEAST A
+            JL   ENDSYM
+            CMP2 CHAR9(5:5)         AND NOT MORE THAN 9
+            JG   ENDSYM
+            CMP2 CHAR0(5:5)         ALSO CHECK IF 0..9
+            JGE  *+2
+            STJ  LETTER(4:5)        LETTER FOUND
+*
+            DEC1 1                  DECREMENT NUMBER OF CHARACTERS
+            J1N  *+3
+            SLAX 1
+            INCX 0,2                ADD NEW CHARACTER TO SYMBOL
+            INC5 1                  NEXT COLUMN
+            JMP  SCANSYM
+*
+SYMERROR    JMP  BADSYM             BAD SYMBOL (TOO LONG)
+            JMP  GSQUIT             NO JUSTIFICATION NEEDED
+*
+ENDSYM      J1N  SYMERROR           CHECK IF TOO LONG
+            LD2  LETTER             CHECK IF NEED JUSTIFY.
+            J2Z  *+2
+            SLAX 0,1                REGISTER 1 HAS COUNT
+*
+GSQUIT      STA  SYM                SAVE SYMBOL
+            STX  SYM+1
+*
+            LDA  GSSAVEA
+            LDX  GSSAVEX
+GSSAVE1     ENT1 *
+GSSAVE2     ENT2 *
+GSEXIT      JMP  *
+*
+LABEL       ORIG *+2                SPACE FOR LABEL (IF ANY)
+OP          ORIG *+1                AND OPCODE
+*
+*
+*           SUBROUTINE GETFIELDS
+*
+*           GET THE FIELDS FOR THE ASSEMBLY LANGUAGE.
+*           FIELDS ARE LABEL, OPCODE AND OPERAND. LABEL
+*           MAY BE MISSING. REGISTER I5 IS LEFT
+*           POINTING JUST BEFORE THE OPERAND.
+*           THE EXPRESSION ROUTINE WILL SKIP ONE COLUMN
+*           TO BEGIN EVALUATION, SO LEAVE I5 ONE BEFORE
+*           THE START OF THE OPERAND.
+*
+*           FIXED FIELD
+*
+GFSAVEA     ORIG *+1
+*
+GETFIELDS   STJ  GFEXIT             SAVE REGISTERS
+            STA  GFSAVEA
+            ST1  GFSAVE1(0:2)
+*
+            STZ  LABEL              DEFAULT IS BLANK LABEL
+            LDA  CARD               CHECK COLUMN ONE
+            JAZ  NOLABEL
+            ENT5 0                  COLUMN OF LABEL
+            JMP  GETSYM
+*
+            LDA  LETTER             ERROR CHECKING
+            JANZ LEGALLABEL
+            JMP  BADSYM             NUMERIC SYMBOL
+            JMP  NOLABEL
+*
+LEGALLABEL  ENT1 LABEL              MOVE LABEL FROM SYM
+            MOVE SYM(2)
+*
+NOLABEL     ENT5 11                 OPCODE
+            JMP  GETSYM
+            LDA  SYM(1:4)           FOUR CHAR OPCODE
+            STA  OP
+*
+            ENT5 15                 READY FOR OPERAND
+*                                   (COLUMN 17)
+*
+            LDA  GFSAVEA
+GFSAVE1     ENT1 *
+GFEXIT      JMP  *
+*
+* TYP
+*   A MACHINE INSTRUCTION
+*   B ORIG
+*   C CON OK
+*   D ALF OK
+*   E EQU OK
+*   F END OK
+*
+OPTAB       EQU  *
+            ALF  ADD A
+            ADD
+            ALF  ALF D
+            CON  0
+            ALF  CHARA
+            CHAR
+            ALF  CON C
+            CON  0
+            ALF  CMPAA
+            CMPA
+            ALF  CMPXA
+            CMPX
+            ALF  CMP1A
+            CMP1
+            ALF  CMP2A
+            CMP2
+            ALF  CMP3A
+            CMP3
+            ALF  CMP4A
+            CMP4
+            ALF  CMP5A
+            CMP5
+            ALF  CMP6A
+            CMP6
+            ALF  DECAA
+            DECA
+            ALF  DECXA
+            DECX
+            ALF  DEC1A
+            DEC1
+            ALF  DEC2A
+            DEC2
+            ALF  DEC3A
+            DEC3
+            ALF  DEC4A
+            DEC4
+            ALF  DEC5A
+            DEC5
+            ALF  DEC6A
+            DEC6
+            ALF  DIV A
+            DIV
+            ALF  END F
+            CON  0
+            ALF  ENNAA
+            ENNA
+            ALF  ENNXA
+            ENNX
+            ALF  ENN1A
+            ENN1
+            ALF  ENN2A
+            ENN2
+            ALF  ENN3A
+            ENN3
+            ALF  ENN4A
+            ENN4
+            ALF  ENN5A
+            ENN5
+            ALF  ENN6A
+            ENN6
+            ALF  ENTAA
+            ENTA
+            ALF  ENTXA
+            ENTX
+            ALF  ENT1A
+            ENT1
+            ALF  ENT2A
+            ENT2
+            ALF  ENT3A
+            ENT3
+            ALF  ENT4A
+            ENT4
+            ALF  ENT5A
+            ENT5
+            ALF  ENT6A
+            ENT6
+            ALF  EQU E
+            CON  0
+*
+HLTINDEX    EQU  *-OPTAB/2          INDEX OF HLT
+            ALF  HLT A
+            HLT
+            ALF  IN  A
+            IN
+            ALF  INCAA
+            INCA
+            ALF  INCXA
+            INCX
+            ALF  INC1A
+            INC1
+            ALF  INC2A
+            INC2
+            ALF  INC3A
+            INC3
+            ALF  INC4A
+            INC4
+            ALF  INC5A
+            INC5
+            ALF  INC6A
+            INC6
+            ALF  IOC A
+            IOC
+            ALF  JAN A
+            JAN
+            ALF  JANNA
+            JANN
+            ALF  JANPA
+            JANP
+            ALF  JANZA
+            JANZ
+            ALF  JAP A
+            JAP
+            ALF  JAZ A
+            JAZ
+            ALF  JBUSA
+            JBUS
+            ALF  JE  A
+            JE
+            ALF  JG  A
+            JG
+            ALF  JGE A
+            JGE
+            ALF  JL  A
+            JL
+            ALF  JLE A
+            JLE
+            ALF  JMP A
+            JMP
+            ALF  JNE A
+            JNE
+            ALF  JNOVA
+            JNOV
+            ALF  JOV A
+            JOV
+            ALF  JREDA
+            JRED
+            ALF  JSJ A
+            JSJ
+            ALF  JXN A
+            JXN
+            ALF  JXNNA
+            JXNN
+            ALF  JXNPA
+            JXNP
+            ALF  JXNZA
+            JXNZ
+            ALF  JXP A
+            JXP
+            ALF  JXZ A
+            JXZ
+            ALF  J1N A
+            J1N
+            ALF  J1NNA
+            J1NN
+            ALF  J1NPA
+            J1NP
+            ALF  J1NZA
+            J1NZ
+            ALF  J1P A
+            J1P
+            ALF  J1Z A
+            J1Z
+            ALF  J2N A
+            J2N
+            ALF  J2NNA
+            J2NN
+            ALF  J2NPA
+            J2NP
+            ALF  J2NZA
+            J2NZ
+            ALF  J2P A
+            J2P
+            ALF  J2Z A
+            J2Z
+            ALF  J3N A
+            J3N
+            ALF  J3NNA
+            J3NN
+            ALF  J3NPA
+            J3NP
+            ALF  J3NZA
+            J3NZ
+            ALF  J3P A
+            J3P
+            ALF  J3Z A
+            J3Z
+            ALF  J4N A
+            J4N
+            ALF  J4NNA
+            J4NN
+            ALF  J4NPA
+            J4NP
+            ALF  J4NZA
+            J4NZ
+            ALF  J4P A
+            J4P
+            ALF  J4Z A
+            J4Z
+            ALF  J5N A
+            J5N
+            ALF  J5NNA
+            J5NN
+            ALF  J5NPA
+            J5NP
+            ALF  J5NZA
+            J5NZ
+            ALF  J5P A
+            J5P
+            ALF  J5Z A
+            J5Z
+            ALF  J6N A
+            J6N
+            ALF  J6NNA
+            J6NN
+            ALF  J6NPA
+            J6NP
+            ALF  J6NZA
+            J6NZ
+            ALF  J6P A
+            J6P
+            ALF  J6Z A
+            J6Z
+            ALF  LDA A
+            LDA
+            ALF  LDANA
+            LDAN
+            ALF  LDX A
+            LDX
+            ALF  LDXNA
+            LDXN
+            ALF  LD1 A
+            LD1
+            ALF  LD1NA
+            LD1N
+            ALF  LD2 A
+            LD2
+            ALF  LD2NA
+            LD2N
+            ALF  LD3 A
+            LD3
+            ALF  LD3NA
+            LD3N
+            ALF  LD4 A
+            LD4
+            ALF  LD4NA
+            LD4N
+            ALF  LD5 A
+            LD5
+            ALF  LD5NA
+            LD5N
+            ALF  LD6 A
+            LD6
+            ALF  LD6NA
+            LD6N
+            ALF  MOVEA
+            MOVE
+            ALF  MUL A
+            MUL
+            ALF  NOP A
+            NOP
+            ALF  NUM A
+            NUM
+            ALF  ORIGB
+            CON  0
+            ALF  OUT A
+            OUT
+            ALF  SLA A
+            SLA
+            ALF  SLAXA
+            SLAX
+            ALF  SLC A
+            SLC
+            ALF  SRA A
+            SRA
+            ALF  SRAXA
+            SRAX
+            ALF  SRC A
+            SRC
+            ALF  STA A
+            STA
+            ALF  STJ A
+            STJ
+            ALF  STX A
+            STX
+            ALF  ST1 A
+            ST1
+            ALF  ST2 A
+            ST2
+            ALF  ST3 A
+            ST3
+            ALF  ST4 A
+            ST4
+            ALF  ST5 A
+            ST5
+            ALF  ST6 A
+            ST6
+            ALF  SUB A
+            SUB
+*
+NUMBEROPS   EQU  *-OPTAB/2          2 LOCATIONS PER ENTRY
+*
+OPTYPE      CON  0
+*
+VALUE       ORIG *+1
+*
+NSYMBOL     CON  0                  NUMBER OF SYMBOLS (TIMES 4)
+SYMINDEX    ORIG *+1
+SYMTAB      ORIG 4*MAXSYMBOL+*      SYMBOL TABLE
+*
+*           SUBROUTINE SEARCH OP
+*
+*           SEARCH THE OPCODE TABLE (OPTAB) FOR THE
+*           OPCODE IN OP. A BINARY SEARCH IS USED. IF
+*           THE OPCODE IS NOT FOUND, AN UNOP ERROR
+*           OCCURS. A HLT IS USED FOR UNOP ERRORS. THE
+*           VALUE OF THE SECOND WORD IS
+*           STORED IN VALUE AND THE TYPE OF THE OPCODE
+*           IN OPTYPE.
+*
+SOPSAVEA    ORIG *+1
+SOPSAVEX    ORIG *+1
+OPHIGH      ORIG *+1
+OPLOW       ORIG *+1
+OPMID       ORIG *+1
+*
+SEARCHOP    STJ  SOPEXIT            SAVE REGISTERS
+            STA  SOPSAVEA
+            STX  SOPSAVEX
+            ST1  SOPSAVE1(0:2)
+*
+            ENT1 NUMBEROPS-1
+            ST1  OPHIGH
+            STZ  OPLOW              INITIALIZE HIGH AND LOW
+*
+SOPLOOP     LDA  OPLOW
+            ADD  OPHIGH
+            SRAX 5
+            DIV  TWO                COMPUTE OPMID = (HIGH+LOW)/2
+            STA  OPMID
+            LD1  OPMID
+            INC1 0,1                2*OPMID (TWO WORDS PER ENTRY)
+*
+            LDA  OPTAB,1(1:4)
+            CMPA OP                 COMPARE OPCODES
+            JE   SOPFOUND
+*
+            JL   UPLOW
+DOWNHIGH    LD1  OPMID              OP < OPTAB[OPMID]
+            DEC1 1
+            ST1  OPHIGH             SO HIGH = OPMID - 1
+            JMP  SOPDONE
+*
+UPLOW       LD1  OPMID              OP > OPTAB[MID]
+            INC1 1
+            ST1  OPLOW              SO LOW = OPMID + 1
+*           JMP  SOPDONE
+*
+SOPDONE     LDA  OPHIGH             CHECK FOR END
+            CMPA OPLOW
+            JGE  SOPLOOP            CHECK FROM LOW TO HIGH
+*
+            JMP  UNOP               OPCODE NOT FOUND IN OPTAB
+            ENT1 2*HLTINDEX         DEFAULT OPCODE
+*
+SOPFOUND    LDA  OPTAB+1,1          NUMERIC OPCODE
+            STA  VALUE
+            LD1  OPTAB,1(5:5)       OPCODE TYPE
+            ST1  OPTYPE
+*
+            LDA  SOPSAVEA           RESTORE REGISTERS
+            LDX  SOPSAVEX
+SOPSAVE1    ENT1 *
+SOPEXIT     JMP  *
+*
+*
+*           SUBROUTINE DEFINESYM
+*
+*           DEFINE A SYMBOL. PUT IT IN THE SYMBOL
+*           TABLE. THE A REGISTER HAS ITS VALUE. THE
+*           FORWARD REFERENCE FIELD IS SET TO INDICATE
+*           NO FORWARD REFERENCES (YET) BY SETTING IT
+*           TO CHAINED.
+*
+DEFINESYM   STJ  DSEXIT             SAVE REGISTERS
+            ST1  DSSAVE1(0:2)
+*
+            LD1  NSYMBOL            NEXT SYMBOL TABLE SPACE
+            STA  SYMTAB+2,1         SYMBOL VALUE
+            LDA  SYM
+            STA  SYMTAB,1           FIRST FIVE CHARS
+            LDA  SYM+1
+            STA  SYMTAB+1,1
+            LDA  CHAINEND
+            STA  SYMTAB+3,1(4:5)    FORWARD REFERENCE
+*
+            ST1  SYMINDEX           SYMBOL INDEX
+            INC1 4
+            ST1  NSYMBOL            UPDATE NUMBER OF SYMBOLS
+*
+            LDA  SYMTAB-2,1         RESTORE A REGISTER
+DSSAVE1     ENT1 *
+DSEXIT      JMP  *
+*
+*
+*           SUBROUTINE SEARCHSYM
+*
+*           SEARCH SYMBOL TABLE. SYMBOL TABLE
+*           IS SEARCHED FROM THE BACK TO THE FRONT.
+*           THE RESULT OF THE SEARCH IS RETURNED IN
+*           SYMINDEX. SYMINDEX IS AN INDEX INTO SYMTAB
+*           IF FOUND, OR NEGATIVE
+*
+SSSAVEA     ORIG *+1
+SSSAVEX     ORIG *+1
+*
+SEARCHSYM   STJ  SSEXIT             SAVE REGISTERS
+            STA  SSSAVEA
+            STX  SSSAVEX
+            ST1  SSSAVE1(0:2)
+*
+            LDA  SYM
+            LDX  SYM+1              SYMBOL TO SEARCH FOR
+            LD1  NSYMBOL            SYMTAB INDEX
+*
+SYMLOOP     DEC1 4
+            J1N  SYMDONE            IF NEGATIVE, NOT FOUND
+            CMPA SYMTAB,1(1:5)      COMPARE
+            JNE  SYMLOOP
+            CMPX SYMTAB+1,1(1:5)    AND COMPARE
+            JNE  SYMLOOP
+*
+SYMDONE     ST1  SYMINDEX           EITHER FOUND OR NOT
+*
+SSSAVE1     ENT1 *
+            LDA  SSSAVEA
+            LDX  SSSAVEX
+SSEXIT      JMP  *
+*
+*
+UNDEFSYM    ORIG *+1
+NOFORWARD   CON  1                  NONZERO, NO FORWARDS
+*
+*           UPPER AND LOWER BOUNDS FOR EXPRESSIONS
+*
+HLBYTE      CON  0                  INDEX, FIELD
+            CON  63
+HLADDR      CON  0                  ADDRESSES (ORIG, END)
+            CON  3999
+HL2BYTE     CON  -4095              ADDRESS FIELD
+            CON  +4095
+HLWORD      CON  -1073741823        MIN AND MAX WORD
+            CON  +1073741823
+*
+*
+OPERATOR    ORIG *+44               FIRST 44 ZEROS
+            CON  1                  ADD
+            CON  2                  SUBTRACT
+            CON  3                  MULTIPLY
+            CON  4                  DIVIDE
+            ORIG *+6
+            CON  5                  COLON OPERATOR
+            ORIG *+10
+*
+*
+*           SUBROUTINE EVALSYM
+*
+*           EVALUATE THE NEXT SYMBOL. VALUE RETURNED
+*           IN A. UNDEFSYM IS NONZERO IF VALUE IS
+*           UNDEFINED. SYMBOLS MAY BE *, NUMBER
+*           OR SYMBOL. GETSYM IS USED TO GET NUMBERS
+*           OR SYMBOLS.
+*
+ESSAVEX     ORIG *+1
+*
+EVALSYM     STJ  ESEXIT             SAVE REGISTERS
+            ST1  ESSAVE1(0:2)
+            STX  ESSAVEX
+*
+            LDA  CARD,5             CARD(COLUMN)
+            CMPA CHARSTAR(5:5)      CHECK FOR *
+            JNE  NOTSTAR
+*
+ISSTAR      INC5 1                  INCREASE COLUMN COUNTER
+            ENTA 0,6                VALUE
+            STZ  UNDEFSYM           DEFINED
+            JMP  ESQUIT
+*
+NOTSTAR     JMP  GETSYM             GET SYMBOL
+            LD1  LETTER
+            J1NZ ISSYMBOL           LETTER NONZERO MEANS SYMBOL
+*
+ISNUMBER    LDA  SYM                CONVERT SYMBOLIC TO NUMERIC
+            LDX  SYM+1
+            NUM
+            JOV  EXPOV              IF OVERFLOW, ERROR
+            STZ  UNDEFSYM
+            JMP  ESQUIT
+*
+ISSYMBOL    JMP  SEARCHSYM          SEARCH FOR SYMBOL
+            LD1  SYMINDEX
+            J1N  ISNOTTHERE         NOT IN SYMBOL TABLE
+            LDA  SYMTAB,1
+            JAN  ISNOTDEF           IF IN TABLE, NOT DEFINED
+*
+ISDEFINED   LDA  SYMTAB+2,1
+            STZ  UNDEFSYM           DEFINED
+            JMP  ESQUIT
+*
+ISNOTTHERE  ENTA -1                 NOT IN SYMBOL TABLE, ENTER
+            JMP  DEFINESYM          ARBITRARY VALUE
+            LD1  SYMINDEX
+            STA  SYMTAB,1(0:0)      MARK NEGATIVE: FORWARD REF
+*
+ISNOTDEF    LDA  SYMTAB+3,1         FORWARD REFERENCE
+            STJ  UNDEFSYM(4:5)      UNDEFINED VALUE
+            ST6  SYMTAB+3,1         UPDATE CHAIN ADDRESS
+*
+ESQUIT      EQU  *
+            LDX  ESSAVEX
+ESSAVE1     ENT1 *
+ESEXIT      JMP  *
+*
+*
+*           SUBROUTINE EXPRESSION
+*
+*           EVALUATE THE NEXT EXPRESSION. EXPRESSION
+*           STARTS AT COLUMN+1 (COLUMN IN I5). (THE
+*           PLUS ONE IS TO SKIP OVER THE LAST DELIMITER)
+*           OPERANDS ARE EVALUATED BY EVALSYM.
+*           OPERATORS ARE + - * / :
+*           AND ARE APPLIED LEFT TO RIGHT UNTIL A
+*           DELIMITER IS FOUND.
+*
+VALUE1      ORIG *+1
+VALUE2      ORIG *+1
+EXPSAVEX    ORIG *+1
+*
+EXPRESSION  STJ  EXPEXIT            SAVE REGISTERS
+            ST1  EXPSAVE1(0:2)
+            ST2  EXPSAVE2(0:2)
+            STX  EXPSAVEX
+*
+            INC5 1
+            JMP  EVALSYM            EVALUATE FIRST OPERAND
+*
+EXPLOOP     LD2  CARD,5             CHECK NEXT COLUMN
+            LD2  OPERATOR,2         FOR OPERATOR
+            J2NP EXPOVER
+*
+            LD1  UNDEFSYM           NO UNDEFS AND OPERATORS
+            J1NZ FORERROR           FORWARD REFERENCE ERROR
+*
+            INC5 1                  SKIP OPERATOR
+            STA  VALUE1
+            JMP  EVALSYM            SECOND OPERATOR
+            STA  VALUE2
+            LDA  VALUE1
+            JMP  *,2                APPROPRIATE OPERATOR
+            JMP  OPADD
+            JMP  OPSUB
+            JMP  OPMUL
+            JMP  OPDIV
+            JMP  OP8ADD
+*
+OPADD       ADD  VALUE2             VALUE1 = VALUE1 + VALUE2
+            JMP  NEXTOP
+*
+OPSUB       SUB  VALUE2             VALUE1 = VALUE1 - VALUE2
+            JMP  NEXTOP
+*
+OPMUL       MUL  VALUE2             VALUE1 = VALUE1 * VALUE2
+            JANZ EXPOV              IF A NONZERO, OVERFLOW
+            SLAX 5                  PUT VALUE IN A
+            JMP  NEXTOP
+*
+OPDIV       SRAX 5                  VALUE1 = VALUE1 / VALUE2
+            DIV  VALUE2
+            JMP  NEXTOP
+*
+OP8ADD      MUL  EIGHT              VALUE1 = 8*VALUE1 + VALUE2
+            JANZ EXPOV
+            SLAX 5
+            ADD  VALUE2
+            JMP  NEXTOP
+*
+NEXTOP      JOV  EXPOV              CHECK OVERFLOW
+            JMP  EXPLOOP
+*
+EXPOVER     LD1  UNDEFSYM
+            J1Z  EXPQUIT            CHECK IF UNDEFINED
+            LD1  NOFORWARD          AND FORWARD REFERENCES
+FORERROR    J1NZ ILLFOR             NOT ALLOWED => ERROR
+*
+EXPQUIT     EQU  *
+EXPSAVE1    ENT1 *                  RESTORE INDEX 1
+            CMPA 0,1                CHECK LOWER BOUND
+            JGE  *+3
+            JMP  EXPOV              LESS THAN LOWER
+            LDA  0,1                REPLACE WITH LOWER
+            CMPA 1,1                CHECK UPPER
+            JLE  *+3
+            JMP  EXPOV              MORE THAN UPPER
+            LDA  1,1                REPLACE WITH UPPER
+*
+            STJ  NOFORWARD(4:5)     FORWARDS NOT ALLOWED
+*
+            LDX  EXPSAVEX
+EXPSAVE2    ENT2 *
+EXPEXIT     JMP  *
+*
+*
+*           PRINTER SELECTION FORMAT VARIABLES
+*
+PRT         CON  0                  PRINT FORMAT HOLDING VARIABLE
+ADR         EQU  4:4                PRINT VALUE AS ADDRESS
+VAL         EQU  3:3                PRINT VALUE AS WORD
+INST        EQU  2:2                PRINT VALUE AS INSTRUCTION
+LOC         EQU  1:1                PRINT LOCATION COUNTER
+*
+PRTFMT      CON  0                  COMMENT PRINT
+            CON  1(LOC),1(INST)     MACHINE: TYPE 1
+            CON  1(LOC),1(ADR)      ORIG: TYPE 2
+            CON  1(LOC),1(VAL)      CON:  TYPE 3
+            CON  1(LOC),1(VAL)      ALF:  TYPE 4
+            CON  1(VAL)             EQU:  TYPE 5
+            CON  1(LOC),1(ADR)      END:  TYPE 6
+*
+PRTBUF      ORIG *+24               PRINTER BUFFER
+LINE        ORIG *+30               FIRST 30 COLUMNS
+* CARD      ORIG *+80               CARD IMAGE          MULTIPLE DEFINITION
+*           ORIG *+10               CARD NUMBER
+*
+PRINTLOC    ORIG *+1                LOCATION COUNTER FOR PRT
+*
+*
+*           SUBROUTINE OCTCHAR
+*
+*           CONVERTS A NUMBER FROM A NUMERIC FORMAT INTO
+*           AN OCTAL CHARACTER REPRESENTATION.
+*           CHARACTERS ARE STORED ONE PER WORD, SIGN FIRST,
+*           ZERO FILL. THE NUMBER IS IN THE A REGISTER,
+*           THE NUMBER OF CHARACTERS TO BE USED IN I2
+*           AND THE ADDRESS IN WHICH THEY SHOULD BE
+*           STORED IN REGISTER I1.
+*
+OCSAVEX     ORIG *+1
+OCTEMPA     ORIG *+1
+*
+OCTCHAR     STJ  OCEXIT             SAVE REGISTERS
+            STX  OCSAVEX
+*
+            STA  OCTEMPA            SAVE VALUE
+            STA  *+1(0:0)           SAVE SIGN FOR TESTING
+            ENTA 1                  PLUS OR MINUS
+            ENTX 44                 PLUS SIGN
+            JAP  STORESIGN
+            ENTX 45                 MINUS SIGN
+STORESIGN   STX  0,1                FIRST CHARACTER IS SIGN
+            LDA  OCTEMPA(1:5)       MAGNITUDE ONLY
+*
+            INC1 0,2                LOW ORDER CHARACTERS FIRST
+*
+NXTDIGIT    SRAX 5                  SHIFT TO X FOR DIVIDE
+            DIV  EIGHT              OCTAL
+            INCX 30                 X HAS DIGIT, CONVERT TO CHAR
+            STX  0,1                STORE CHARACTER
+*
+            DEC1 1
+            DEC2 1                  NUMBER OF CHARACTERS
+            J2P  NXTDIGIT
+*
+            LDX  OCSAVEX            RESTORE REGISTERS
+OCEXIT      JMP  *
+*
+*
+*
+*           SUBROUTINE PRINTLINE
+*
+*           PRINT A LINE FOR THE OUTPUT LISTING.
+*           LINES CAN BE OF DIFFERENT TYPES.
+*           THE FORMAT OF EACH LINE IS
+*           DETERMINED BY PTRFMT(OPTYPE).
+*
+PLSAVEA     ORIG *+1
+PLSAVEX     ORIG *+1
+*
+PRINTLINE   STJ  PLEXIT             SAVE REGISTERS
+            STA  PLSAVEA
+            STX  PLSAVEX
+            ST1  PLSAVE1(0:2)
+            ST2  PLSAVE2(0:2)
+            ST3  PLSAVE3(0:2)
+*
+            LD1  OPTYPE
+            STZ  OPTYPE             LAST USE OF OPTYPE, RESET
+            LDA  PRTFMT,1           PRINT FORMAT FOR THIS TYPE
+            STA  PRT
+*
+*           CHECK IF LOCATION COUNTER TO BE PRINTED.
+*           IF SO PRINT IN COLUMNS 8-13.
+*
+            LDA  PRT(LOC)           LOCATION COUNTER
+            JAZ  NOLOCPRT
+            LDA  PRINTLOC           PRINT VALUE
+            ENT1 LINE+7
+            ENT2 4                  FOUR CHARACTERS (PLUS SIGN)
+            JMP  OCTCHAR
+NOLOCPRT    EQU  *
+*
+*
+*           CHECK IF VALUE SHOULD BE PRINTED AS NUMBER
+*
+            LDA  PRT(VAL)           VALUE AS NUMBER
+            JAZ  NOVALPRT
+            LDA  VALUE              VALUE HAS VALUE
+            ENT1 LINE+17            COLUMNS 18 - 27
+            ENT2 10
+            JMP  OCTCHAR
+NOVALPRT    EQU  *
+*
+*           PRINTVALUE AS AN ADDRESS FOR ORIG AND END
+*
+            LDA  PRT(ADR)
+            JAZ  NOADRPRT
+            LDA  VALUE              VALUE HAS ADDRESS
+            ENT1 LINE+23            COLUMNS 24 - 28
+            ENT2 4
+            JMP  OCTCHAR
+NOADRPRT    EQU  *
+*
+*           CHECK IF VALUE SHOULD BE AN INSTRUCTION
+*
+            LDA  PRT(INST)
+            JAZ  NOOPPRT
+            LDA  VALUE(0:2)         ADDRESS FIELD
+            ENT1 LINE+14            COLUMNS 15 - 19
+            ENT2 4
+            JMP  OCTCHAR
+*
+            LDA  VALUE(3:3)         INDEX FIELD
+            ENT1 LINE+19            COLUMNS 20-22 BUT
+            ENT2 2
+            JMP  OCTCHAR
+            STZ  LINE+19            CLEAR SIGN
+*
+            LDA  VALUE(4:4)         FIELD SPECIFICATION
+            ENT1 LINE+22            COLUMNS 23-25 BUT
+            ENT2 2
+            JMP  OCTCHAR
+            STZ  LINE+22            CLEAR SIGN
+*
+            LDA  VALUE(5:5)         OPCODE FIELD
+            ENT1 LINE+25            COLUMNS 26-28 BUT
+            ENT2 2
+            JMP  OCTCHAR
+            STZ  LINE+25            CLEAR SIGN
+*
+NOOPPRT     EQU  *
+*
+*           CARD IMAGE IS ALREADY IN LINE IMAGE IN CARD.
+*           NOW APPEND CARD NUMBER. CARD NUMBER IS
+*           DECIMAL, SO WE USE CHAR, BUT THEN MUST
+*           SUPPRESS LEADING ZEROS.
+*
+            LDA  CARDNUMBER
+            CHAR
+            ENT1 LINE+110           COLUMNS 111-120
+*
+LEADZERO    STZ  0,1                BLANK
+            INC1 1
+            ENTA 0
+            SLC  1
+            CMPA CHAR0(5:5)         CHECK FOR LEADING ZEROS
+            JE   LEADZERO
+*
+STRCHR      STA  0,1                STORE NONZERO CHARACTER
+            JXZ  ENDCARDNUM
+            INC1 1
+            ENTA 0
+            SLC  1                  NEXT CHARACTER
+            JMP  STRCHR
+ENDCARDNUM  EQU  *
+*
+            JBUS *(LP)
+*
+*           NOW OUTPUT LINE MUST BE PACKED INTO BUFFER
+*
+            ENT1 119                120 CHARACTERS
+            ENT2 24                 NUMBER OF WORDS
+*
+PCKWORD     ENT3 5
+            ENTX 0                  PACK BACKWARDS
+*
+PCKCHAR     LDA  LINE,1             NEXT CHARACTER
+            STZ  LINE,1             BLANK FOR NEXT TIME
+            DEC1 1
+            SRC  1
+            DEC3 1
+            J3P  PCKCHAR            GET NEXT CHARACTER
+            DEC2 1
+            STX  PRTBUF,2
+            J2P  PCKWORD
+*
+            OUT  PRTBUF(LP)
+*
+            LDA  LINERROR           NUMBER OF ERRORS THIS LINE
+            ADD  NERROR             TOTAL NUMBER OF ERRORS
+            STA  NERROR
+            STZ  LINERROR
+*
+            LDA  PLSAVEA
+            LDX  PLSAVEX
+PLSAVE1     ENT1 *
+PLSAVE2     ENT2 *
+PLSAVE3     ENT3 *
+PLEXIT      JMP  *
+*
+NERROR      CON  0                  TOTAL NUMBER OF ERRORS IN INPUT
+LINERROR    CON  0                  NUMBER OF ERRORS THIS LINE
+*
+*           SUBROUTINE ERROR
+*
+*           THIS SUBROUTINE PUTS AN ERROR FLAG INTO THE
+*           OUTPUT LINE IMAGE AND COUNTS THE NUMBER OF
+*           ERRORS PER LINE, UP TO 5 ERROR FLAGS WILL BE
+*           SIGNALLED. THE ERROR FLAG IS THE CHARACTER IN
+*           BYTE 1:1 OF THE WORD FOLLOWING THE CALL TO
+*           ERROR.
+*
+ERRSAVA     ORIG *+1
+*
+ERROR       STJ  *+3(0:2)           SAVE REGISTERS
+            STA  ERRSAVA
+            ST1  ERRSAVE1(0:2)
+*
+            ENT1 *                  RETURN ADDRESS
+            LDA  0,1(1:1)           ACTUALLY FLAG ADDRESS
+            INC1 1                  INCREASE ADDRESS
+            ST1  ERREXIT(0:2)       STORE REAL RETURN ADDRESS
+*
+            LD1  LINERROR           INCREASE NUMBER OF
+            INC1 1
+            ST1  LINERROR           ERRORS IN THIS LINE
+*
+            DEC1 5                  CHECK IF MORE THAN 5
+            J1P  *+2
+            STA  LINE+5,1           STORE ERROR FLAG IN OUTPUT
+*
+            LDA  ERRSAVA            RESTORE REGISTERS
+ERRSAVE1    ENT1 *
+ERREXIT     JMP  *
+*
+*
+*           A SEPARATE ERROR ROUTINE FOR EACH TYPE.
+*
+MULDEF      STJ  *+3                MULTIPLY-DEFINED LABELS
+            JMP  ERROR
+            ALF  M    
+            JMP  *
+*
+BADSYM      STJ  *+3                BAD SYMBOL (TOO LONG, NUMERIC)
+            JMP  ERROR
+            ALF  L                L FOR LABEL
+            JMP  *
+*
+UNOP        STJ  *+3                UNDEFINED OPCODE
+            JMP  ERROR
+            ALF  U    
+            JMP  *
+*
+ILLFOR      STJ  *+3                ILLEGAL FORWARD REFERENCE
+            JMP  ERROR
+            ALF  F    
+            JMP  *
+*
+EXPOV       STJ  *+3                OVERFLOW IN EXPRESSION
+            JMP  ERROR
+            ALF  O    
+            JMP  *
+*
+ILLSYN      STJ  *+3                ILLEGAL SYNTAX
+            JMP  ERROR
+            ALF  S    
+            JMP  *
+*
+*
+*
+*           SUBROUTINE DEFINELAB
+*
+*           DEFINE A LABEL IF THERE IS ONE. THE VALUE
+*           OF THE LABEL IS IN THE A REGISTER. FIRST
+*           SEARCH THE SYMBOL TABLE FOR MULTIPLY
+*           DEFINED LABELS OR FORWARD REFERENCES.
+*
+DEFINELAB   STJ  DLEXIT             SAVE REGISTERS
+            ST1  DLSAVE1(0:2)
+            ST2  DLSAVE2(0:2)
+*
+            LD1  LABEL(1:1)         CHECK IF THERE IS LABEL
+            J1Z  DLSAVE1            NO LABEL
+*
+            ENT1 SYM
+            MOVE LABEL(2)           MOVE LABEL TO SYM
+*
+            JMP  SEARCHSYM          SEARCH TABLE FOR LABEL
+*
+            LD1  SYMINDEX
+            J1N  NEWLABDEFN         NOT FOUND
+*
+            LD2  SYMTAB,1(0:1)      CHECK SIGN FOR DEFINED/NOT
+            J2P  MULDEF             MULTIPLY-DEFINED
+*
+            STA  SYMTAB+2,1         SAVE VALUE OF FORWARD REF
+            STZ  SYMTAB,1(0:0)
+            JMP  DLSAVE1
+*
+NEWLABDEFN  JMP  DEFINESYM          DEFINE NEW LABEL
+*
+DLSAVE1     ENT1 *
+DLSAVE2     ENT2 *
+DLEXIT      JMP  *
+*
+*
+*           MAIN LOOP STARTS HERE
+*
+MAIN        JMP  INITIALIZE
+*
+MAINLOOP    JMP  READCARD
+*
+            LDA  CARD               CHECK FOR COMMENT
+            CMPA CHARSTAR(5:5)
+            JE   PRTLINE            IF COMMENT JUST PRINT
+*
+            JMP  GETFIELDS          GET LABEL, OP, OPERAND
+            JMP  SEARCHOP           SEARCH FOR OPCODE
+*
+            ST6  PRINTLOC           SAVE LOCATION COUNTER FOR PRT
+*
+            LD1  OPTYPE
+            JMP  *+1,1              JUMP TABLE ON TYPE OF OPCODE
+            JMP  PRTLINE            COMMENT
+            JMP  MACHINEOP          MACHINE OPCODE: TYPE 1 (A)
+            JMP  ORIGOP             ORIG: TYPE 2 (B)
+            JMP  CONOP              CON:  TYPE 3 (C)
+            JMP  ALFOP              ALF:  TYPE 4 (D)
+            JMP  EQUOP              EQU:  TYPE 5 (E)
+            JMP  ENDOP              END:  TYPE 6 (F)
+*
+*
+ENDCASE     LDA  CARD,5             AFTER PROCESSING COLUMN SHOULD
+            JANZ ILLSYN             BE BLANK, IF NOT, ERROR
+*
+PRTLINE     JMP  PRINTLINE          PRINT
+            LDA  ENDASSEM           CHECK FOR END
+            JAZ  MAINLOOP
+            JMP  FINISHUP           FINISH ASSEMBLY
+            HLT
+*
+*
+*
+MACHINEOP   ENTA 0,6                VALUE OF LABEL IS *
+            JMP  DEFINELAB
+*
+            ENT1 HL2BYTE
+            STZ  NOFORWARD          FORWARDS ALLOWED
+            JMP  EXPRESSION         GET ADDRESS PART
+            STA  VALUE(0:2)
+*
+            LDA  CARD,5             CARD(COLUMN)
+            CMPA CHARCOMMA(5:5)     IS IT COMMA?
+            JNE  NOIPART
+*
+IPART       ENT1 HLBYTE             I FIELD IS ONE BYTE
+            JMP  EXPRESSION
+            STA  VALUE(3:3)
+NOIPART     EQU  *
+*
+            LDA  CARD,5
+            CMPA CHARLEFTP(5:5)     CHECK FOR ( FOR FIELD
+            JNE  NOFPART
+            ENT1 HLBYTE             F FIELD IS ONE BYTE
+            JMP  EXPRESSION
+            STA  VALUE(4:4)
+*
+            LDA  CARD,5             CHECK FOR TRAILING )
+            CMPA CHARRIGHTP(5:5)
+            JNE  ILLSYN
+            INC5 1                  SKIP OVER )
+NOFPART     EQU  *
+*
+            JMP  GENERATE
+            JMP  ENDCASE
+*
+*
+*
+EQUOP       ENT1 HLWORD             EQU VALUE CAN BE ANY WORD
+            JMP  EXPRESSION
+            STA  VALUE
+            JMP  DEFINELAB          DEFINE LABEL
+            JMP  ENDCASE
+*
+*
+*
+ORIGOP      ENTA 0,6                DEFINE LABEL FIRST
+            JMP  DEFINELAB
+*
+            ENT1 HLADDR             ORIG VALUE IS ADDRESS
+            JMP  EXPRESSION
+*
+            STA  VALUE              (FOR PRINT)
+            LD6  VALUE              SET LOCATION COUNTER
+*
+            JMP  ENDCASE
+*
+*
+*
+ALFOP       ENTA 0,6                DEFINE LABEL
+            JMP  DEFINELAB
+*
+            ENT1 16                 COLUMN 17
+            LDA  CARD,1
+            ENT2 4                  FOUR MORE
+*
+NXTALFCHAR  INC1 1
+            SLA  1                  SHIFT OVER CHARACTERS
+            ADD  CARD,1(5:5)        AND ADD IN NEXT
+            DEC2 1                  ONE LESS CHARACTER
+            J2P  NXTALFCHAR
+*
+            STA  VALUE
+            JMP  GENERATE           OUTPUT WORD
+            JMP  ENDCASE
+*
+*
+CONTEMPVAL  ORIG *+1
+CONTEMP     ORIG *+1                TEMPORARY VARIABLES
+*
+CONOP       ENTA 0,6
+            JMP  DEFINELAB          DEFINE LABEL FIRST
+*
+            STZ  VALUE              DEFAULT VALUE
+*
+NEXTCON     ENT1 HLWORD             EXPRESSION ARE ANY VALUE
+            JMP  EXPRESSION
+*
+            LDX  CARD,5             CHECK FOR (FIELD)
+            CMPX CHARLEFTP(5:5)
+            JE   CONF
+            STA  VALUE              NO FIELD IS (0:5)
+            JMP  NOF
+*
+CONERROR    JMP  ILLSYN             ERROR IN CON
+            JMP  NOFSTORE
+*
+CONF        STA  CONTEMPVAL         SAVE EXPRESSION
+            ENT1 HLBYTE             UNTIL FIELD EVALUATED
+            JMP  EXPRESSION
+*
+            STA  FMOD(4:4)          CHANGE FIELD OF STORE
+*
+            SRAX 5                  CHECK IF 0 <= L <= R <= 5
+            DIV  EIGHT              L IN A, R IN X
+            CMPX FIVE
+            JG   CONERROR           R > 5
+            STA  CONTEMP
+            CMPX CONTEMP
+            JL   CONERROR           L > R
+            LDA  CONTEMPVAL         EXPRESSION
+FMOD        STA  VALUE(0)           FIELD TO BE CHANGED
+*
+NOFSTORE    LDA  CARD,5             CHECK FOR )
+            CMPA CHARRIGHTP(5:5)
+            JNE  ILLSYN             SYNTAX ERROR
+            INC5 1
+NOF         EQU  *
+*
+            LDA  CARD,5             CHECK FOR COMMA
+            CMPA CHARCOMMA(5:5)
+            JE   NEXTCON            IF SO, DO NEXT PART
+*
+            JMP  GENERATE
+            JMP  ENDCASE
+*
+*
+*
+ENDASSEM    CON  0
+STARTADD    CON  0                  STARTING ADDRESS
+*
+*
+ENDOP       ENTA 0,6
+            JMP  DEFINELAB          DEFINE LABEL
+*
+            ENT1 HLADDR             STARTING ADDRESS IS ADDRESS
+            JMP  EXPRESSION
+            STA  VALUE              FOR PRINT
+            STA  STARTADD           FOR LOADER
+            STJ  ENDASSEM(4:5)      SET NONZERO TO STOP
+            JMP  ENDCASE
+*
+*
+INITIALIZE  STJ  INITEXIT
+            IN   INBUF(CR)          READ FIRST CARD
+            IOC  0(TAPE)            REWIND TAPE
+            ENT6 0                  SET LOCATION COUNTER TO ZERO
+INITEXIT    JMP  *
+*
+*
+CHARA       ALF  AAAAA              CHARACTER CONSTANT
+CHAR0       ALF  00000
+CHAR9       ALF  99999
+CHARSTAR    ALF  *****
+CHARLEFTP   ALF  (((((
+CHARRIGHTP  ALF  )))))
+CHARCOMMA   ALF  ,,,,,
+TWO         CON  2
+FIVE        CON  5
+EIGHT       CON  8
+CHAINEND    CON  4095
+*
+ASMDEF      ALF                     PRINT LINE FOR SYMBOLS
+            ORIG *+1                WHICH ARE DEFINED BY ASSEMBLER
+            ALF  
+            ORIG *+5
+            ALF  ORIG 
+            ALF  *+1
+            ORIG *+3
+            ALF  SYMBO
+            ALF  L DEF
+            ALF  INED 
+            ALF  BY AS
+            ALF  SEMBL
+            ALF  ER   
+            ORIG *+5
+*
+*
+*           SUBROUTINE FINISH UP
+*
+*           WHEN AN END CARD IS READ, WE MUST FINISH
+*           LAST LOADER BLOCK, OUTPUT FORWARD REFERENCE
+*           FIX-UP COMMANDS, AND START ADDRESS.
+*
+FINTEMP     ORIG *+5                FOR CHARACTERS FOR LOCATION
+*
+FINISHUP    STJ  FINEXIT
+            JMP  FINISHBLCK         FINISH LAST BLOCK
+*
+*           CHECK FOR UNDEFINED SYMBOLS AND DEFINE THEM
+*
+            ENTA 1
+            STA  VALUE(0:3)         TYPE FIELD FOR LOADER FIX-UPS
+*
+            ENT3 0                  COUNTER TO SYMBOL TABLE
+NEXTSYM1    LDA  SYMTAB,3           LOAD DEFINED FLAG (SIGN)
+            JAP  DEFNDSYM           IF DEFINED
+*
+            STA  LABEL(1:5)
+            STA  ASMDEF+6(1:5)      FOR PRINT
+            LDA  SYMTAB+1,3         SECOND PART OF NAME
+            STA  LABEL+1
+            STA  ASMDEF+7
+            ENTA 0,6                VALUE FOR DEFINING SYMBOL
+            JMP  DEFINELAB
+            INC6 1                  INCREASE * FOR NEXT
+*
+            ENTA -1,6
+            ENT1 FINTEMP            TEMPORARY FOR OCTAL CHARACTERS
+            ENT2 4
+            JMP  OCTCHAR            CONVERT * TO OCTAL FOR PRINT
+*
+            LDA  FINTEMP
+            STA  ASMDEF+1(3:3)
+            LDA  FINTEMP+1
+            STA  ASMDEF+1(4:4)
+            LDA  FINTEMP+2
+            STA  ASMDEF+1(5:5)
+            LDA  FINTEMP+3
+            STA  ASMDEF+2(1:1)
+            LDA  FINTEMP+4
+            STA  ASMDEF+2(2:2)      INSERT * OCTAL IN PRT LINE
+*
+            OUT  ASMDEF(LP)         PRINT ASSEMBLER DEFINED
+            JBUS *(LP)
+*
+DEFNDSYM    EQU  *                  SYMBOL IS DEFINED
+*
+            LDA  SYMTAB+3,3(4:5)    CHECK FOR CHAIN
+            CMPA CHAINEND
+            JE   UPSYM1             IF NOT, GO ON TO NEXT
+*
+            STA  VALUE(4:5)         PREPARE VALUE FOR LOADER
+            LDA  SYMTAB+2,3(4:5)    ADDRESS OF SYMBOL
+            STA  VALUE(0:2)
+            LDA  VALUE
+            JMP  TAPEOUT            OUTPUT FIX-UP COMMAND
+*
+UPSYM1      INC3 4
+            CMP3 NSYMBOL            CHECK END OF TABLE
+            JL   NEXTSYM1
+*
+            LDA  STARTADD
+            STA  VALUE(0:2)         STARTING ADDRESS
+            ENTA 2
+            STA  VALUE(3:3)         TYPE FOR STARTING ADDRESS
+            STZ  VALUE(4:5)         BYTES 4:5 ZERO
+            LDA  VALUE
+            JMP  TAPEOUT            OUTPUT STARTING ADDRESS
+*
+            JMP  FINISHBUF          CLEAR LAST BUFFER TO TAPE
+*
+FINEXIT     JMP  *
+*
+            END  MAIN

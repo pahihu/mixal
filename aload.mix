@@ -1,0 +1,183 @@
+*
+*           PETERSON: ABSOLUTE LOADER
+*           HTTP://WWW.JKLP.ORG/PROFESSION/BOOKS/MIX/C07.HTML
+*
+*
+*           DATA FOR INPUT SUBROUTINE
+*
+TAPE        EQU  0                  DEVICE NUMBER
+            ORIG 3699
+ADDR        ORIG *+1                ADDRESS OF NEXT WORD TO RETURN
+COUNT       CON  0                  COUNT OF NUMBER OF WORDS
+BUF1        ORIG *+100              BUFFERS FOR
+BUF2        ORIG *+100                      DOUBLE BUFFERING
+INPUTBUF    CON  BUF1               BUFFER TO READ INTO
+USINGBUF    CON  BUF2               BUFFER TO USE
+*
+*
+*           INPUT SUBROUTINE FOR MAGNETIC TAPE.
+*           100 WORD PHYSICAL RECORDS ARE READ FROM
+*           TAPE AND RETURNED TO THE LOADER ONE WORD
+*           AT A TIME, IN A REGISTER. DOUBLE BUFFERING
+*           IS USED. NO REGISTERS, OTHER THAN A, ARE
+*           CHANGED.
+*
+*           FIRST IN BUF1(TAPE) SHOULD BE EXECUTED IN MAIN
+*           PROGRAM TO START DOUBLE BUFFERING.
+*
+INPUT       STJ  EXITINPUT
+            ST1  TEMP1(0:2)
+            ST2  TEMP2(0:2)         SAVE REGISTERS
+*
+            LD1  COUNT              CHECK IF WORDS LEFT IN BUFFER
+            J1P  RETURNWORD
+*
+*           WORDS IN USINGBUF ALL GONE. INPUT MORE INTO
+*           THAT BUFFER, AND SWITCH BUFFER POINTERS.
+*           ALSO RESET COUNT AND ADDRESS FOR RETURN WORDS.
+*
+            LD1  USINGBUF
+            IN   0,1(TAPE)          READ NEW BLOCK
+            LD2  INPUTBUF
+            ST2  USINGBUF           SWITCH BUFFER POINTERS
+            ST2  ADDR
+            ST1  INPUTBUF           BUFFER BEING INPUT TO
+            ENT1 100                COUNTER
+*
+*           RETURN THE NEXT WORD.
+*           ADDRESS IN I2, COUNT IN I1
+*
+RETURNWORD  LD2  ADDR               ADDRESS POINTER FOR NEXT WORD
+            LDA  0,2
+            INC2 1                  SET FOR NEXT WORD
+            ST2  ADDR
+            DEC1 1                  AND DECREMENT COUNTER
+            ST1  COUNT
+*
+TEMP2       ENT2 *
+TEMP1       ENT1 *
+EXITINPUT   JMP  *
+*
+LP          EQU  18
+*
+*           ORIG 3700
+FIRST       CON  *
+*
+*           DATA AND VARIABLES FOR LOADER
+*
+CHKSUM      ORIG *+1                FOR CHECKSUM COMPUTATION
+HEADER      ORIG *+1                HEADER FOR ERRORS
+*
+*           ERROR MESSAGE PRINTING
+*
+CHKMSG      ALF  CHECK
+            ALF  SUM E
+            ALF  RROR
+HDRMSG      ALF  ERROR
+            ALF   IN H
+            ALF  EADER
+*
+*
+ERRORLINE   ALF  ***
+ERRORMSG    ORIG *+3                SPACE FOR MESSAGE
+            ALF
+            ALF    BLO
+            ALF  CK =
+ERRORBLK    ORIG *+1
+            ALF
+            ALF   HEAD
+            ALF  ER =
+ERRORLA     ORIG *+1                LOAD ADDRESS
+            ALF  (LA),
+            ALF
+ERRORN      ORIG *+1                NUMBER OF WORDS
+            ALF  (N)
+            ORIG *+8
+*
+*
+*           AN ABSOLUTE LOADER FOR A MIX MACHINE
+*
+*           LOADER INPUT IS ASSUMED TO BE ON TAPE 0 AS A
+*           SEQUENCE. OF BLOCKS. THE FIRST WIRD OF EACH
+*           BLOCK IS A HEADER, CONTAINING THE NUMBER OF
+*           WORDS TO BE LOADED (N), AND THEIR LOAD
+*           ADDRESS (LA), FOLLOWED BY THE WORDS TO
+*           BE LOADED AND A CHECKSUM. AN EMPTY BLOCK
+*           (N = 0) MEANS THAT LA IS THE STARTING ADDRESS.
+*
+*
+*           INITIALIZATION
+*
+LOADER      IN   BUF1(TAPE)         START DOUBLE BUFFERING
+            ENT3 0                  BLOCK COUNTER
+*
+*           START NEXT BLOCK. INPUT LOAD ADDRESS AND
+*           NUMBER OF WORDS. INITIALIZE CHECKSUM.
+*           INCREMENT BLOCK NUMBER STORED IN I3.
+*
+NEXTBLOCK   JMP  INPUT
+            STA  CHKSUM             INITIAL CHECKSUM VALUE
+            STA  HEADER             SAVE HEADER FOR POSSIBLE ERROR
+            INC3 1
+*
+*           USE I1 FOR LOAD ADDRESS
+*           AND I2 FOR NUMBER OF WORDS
+*
+            LD1  HEADER(0:2)
+            LD2  HEADER(4:5)
+            J1N  HDRERROR           CHECK FOR 0 <= LA
+            CMP1 FIRST              AND LA < LOADER
+            JGE  HDRERROR
+*
+            ENTA -1,2               N-1
+            INCA 0,1                LA+N-1
+            CMPA FIRST
+            JGE  HDRERROR
+*
+            J2Z  0,1                IF N=0, I1 IS START ADDRESS
+*
+*           LOAD THE NEXT N WORDS INTO LA, LA+1, ...
+*           COMPUTE THE CHECKSUM AS WE GO.
+*
+LOADLOOP    JMP  INPUT              GET WORD
+            STA  0,1                LOAD INTO MEMORY
+            INC1 1
+            ADD  CHKSUM
+            STA  CHKSUM
+            DEC2 1
+            J2P  LOADLOOP           CONTINUE FOR MORE WORDS
+*
+*           BLOCK IS LOADED. GET CHECKSUM AND COMPARE
+*
+            JMP  INPUT
+            CMPA CHKSUM
+            JE   NEXTBLOCK
+*
+*           ERROR HANDLING. PRINT MESSAGE AND HALT
+*
+CHKSUMERR   ENT2 CHKMSG             CHECKSUM ERROR
+            JMP  ERROR              PRINT AND HALT ROUTINE
+*
+HDRERROR    ENT2 HDRMSG             HEADER ERROR
+*
+            JMP  ERROR              FALL THROUGH TO ERROR ROUTINE
+*
+*           ERROR ROUTINE. FORMAT ERROR MESSAGE WITH
+*           MESSAGE (ADDRESS IN I2), BLOCK NUMBER (IN I3),
+*           LA AND N (FROM HEADER). PRINT AND HALT
+*
+ERROR       ENT1 ERRORMSG
+            MOVE 0,2(3)             MESSAGES OF 3 WORDS
+            ENTA 0,3                BLOCK NUMBER
+            CHAR
+            STX  ERRORBLK
+            LDA  HEADER(0:2)
+            CHAR
+            STX  ERRORLA(2:5)
+            LDA  HEADER(4:5)        NUMBER N
+            CHAR
+            STX  ERRORN(2:5)
+            OUT  ERRORLINE(LP)      PRINT LINE
+            HLT
+*
+            END  LOADER
