@@ -1,0 +1,14 @@
+# empty punch
+rm -f punch
+
+# assemble hello.mix, punch object cards
+./mixal -a -o hello.mix
+
+# place cardload.dek and card punch output into card reader
+cat cardload.dek punch >reader
+
+# run MIX
+./mixal -r -g
+
+# check printer output
+tail printer
