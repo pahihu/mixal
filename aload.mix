@@ -6,7 +6,10 @@
 *           DATA FOR INPUT SUBROUTINE
 *
 TAPE        EQU  0                  DEVICE NUMBER
-            ORIG 3699
+*
+            ORIG 3680
+FIRST       CON  *
+*
 ADDR        ORIG *+1                ADDRESS OF NEXT WORD TO RETURN
 COUNT       CON  0                  COUNT OF NUMBER OF WORDS
 BUF1        ORIG *+100              BUFFERS FOR
@@ -60,8 +63,6 @@ EXITINPUT   JMP  *
 *
 LP          EQU  18
 *
-*           ORIG 3700
-FIRST       CON  *
 *
 *           DATA AND VARIABLES FOR LOADER
 *
@@ -93,6 +94,7 @@ ERRORLA     ORIG *+1                LOAD ADDRESS
 ERRORN      ORIG *+1                NUMBER OF WORDS
             ALF  (N)
             ORIG *+8
+THREE       CON  3
 *
 *
 *           AN ABSOLUTE LOADER FOR A MIX MACHINE
@@ -123,8 +125,9 @@ NEXTBLOCK   JMP  INPUT
 *           USE I1 FOR LOAD ADDRESS
 *           AND I2 FOR NUMBER OF WORDS
 *
-            LD1  HEADER(0:2)
-            LD2  HEADER(4:5)
+            LD1  HEADER(0:2)        LA
+            LD4  HEADER(3:3)        TYPE
+            LD2  HEADER(4:5)        N
             J1N  HDRERROR           CHECK FOR 0 <= LA
             CMP1 FIRST              AND LA < LOADER
             JGE  HDRERROR
@@ -134,7 +137,13 @@ NEXTBLOCK   JMP  INPUT
             CMPA FIRST
             JGE  HDRERROR
 *
-            J2Z  0,1                IF N=0, I1 IS START ADDRESS
+            CMP4 THREE              CHECK FOR TYPE <= 3
+            JG   HDRERROR
+            JMP  *+1,4              JUMP TABLE ON TYPE
+            JMP  LOADLOOP
+            JMP  FIXUP              TYPE=1, FIXUP
+            J2NZ HDRERROR           TYPE=2, N SHOULD BE ZERO
+            JMP  0,1                I1 IS START ADDRESS
 *
 *           LOAD THE NEXT N WORDS INTO LA, LA+1, ...
 *           COMPUTE THE CHECKSUM AS WE GO.
@@ -152,6 +161,30 @@ LOADLOOP    JMP  INPUT              GET WORD
             JMP  INPUT
             CMPA CHKSUM
             JE   NEXTBLOCK
+*
+*           FIX UP CHAIN
+*
+*           LA (I1) IS CHAIN ADDRESS, N (I2) IS THE FIXUP ADDRESS.
+*           FOLLOW THE CHAIN UNTIL TILL CHAINEND.
+*
+CHAINEND    CON  4095
+*
+*
+FIXUP       STJ  FUEXIT                 SAVE REGISTERS
+            ST3  FUSAVE3(0:2)
+*
+FULOOP      LD3  0,1(0:2)               LET I3 THE ADDR AT I1
+            ST2  0,1(0:2)               STORE FIXUP
+            CMP3 CHAINEND               REACHED CHAINEND?
+            JE   FUDONE                 DONE
+            ENT1 0,3                    POINT I1 TO I3
+            JMP  FULOOP                 LOOP
+*
+FUDONE      EQU  *
+*
+FUSAVE3     ENT3 *                      RESTORE REGS
+FUEXIT      JMP  *
+*
 *
 *           ERROR HANDLING. PRINT MESSAGE AND HALT
 *
