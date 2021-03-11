@@ -5,6 +5,9 @@ See `runhello` for example usage.
 You can check James L. Peterson's [Computer Organization and Assembly Language Programming](http://www.jklp.org/profession/books/mix/index.html) book, which
 uses the MIX machine.
 
+For a reference see the [MIX Reference Card](https://github.com/pahihu/mixal/blob/master/mixref.pdf).
+
+
 Changes:
 
   * ALF statement without quotes
