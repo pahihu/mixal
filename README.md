@@ -10,6 +10,7 @@ For a reference see the [MIX Reference Card](https://github.com/pahihu/mixal/blo
 
 Changes:
 
+  * fixed INT encoding (C=5,F=9), added MIX360 user manual and UT-MIX manual
   * ALF statement without quotes
   * assemble only
   * core memory support (non-volatile memory)
@@ -33,6 +34,6 @@ Changes:
 
 
 **NOTE**: execution trace and memory dump mechanics loosely 
-follows Knuth, Sites: MIX/360 User's Guide, Stanford, March, 1971. For the UT-MIX extensions see Peterson: UT-MIX Reference Manual, UT Austin, Jan, 1977. Good luck!
+follows [Knuth, Sites: MIX/360 User's Guide](https://github.com/pahihu/mixal/blob/master/doc/CS-TR-71-197.pdf). For the UT-MIX extensions see [Peterson: UT-MIX Reference Manual](https://github.com/pahihu/mixal/blob/master/doc/TR77-64.pdf). Good luck!
 
 

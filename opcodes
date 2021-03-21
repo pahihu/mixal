@@ -34,8 +34,9 @@ xor	05	5       x
 flot    05      6       x
 fix     05      7       x
 neg	05	8	x
-xch	05	9	x
-xeq     05     10	x
+int     05      9       x
+xch	05     10	x
+xeq     05     11	x
 sla	06	0	x
 sra	06	1	x
 slax	06	2	x
@@ -44,7 +45,6 @@ slc	06	4	x
 src	06	5	x
 slb	06	6	x
 srb	06	7	x
-int     06      9       x
 move	07	1
 ld-	08
 ld-n	16

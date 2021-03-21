@@ -349,11 +349,14 @@ static Cell get_V(void)
 
 static void do_nop(void)    { }
 
+/* floating-point operations timing in 4.2.1C */
+
 static void do_add(void)
 {
     if (6 == F) {
         check_float();
         r[A] = float_add(r[A], safe_fetch(cell_to_address(M)));
+        elapsed_time += 2;
     } else
         r[A] = add(r[A], get_V());
 }
@@ -363,6 +366,7 @@ static void do_sub(void)
     if (6 == F) {
         check_float();
         r[A] = float_subtract(r[A], safe_fetch(cell_to_address(M)));
+        elapsed_time += 2;
     } else
         r[A] = sub(r[A], get_V());
 }
@@ -372,6 +376,8 @@ static void do_mul(void)
     if (6 == F) {
         check_float();
         r[A] = float_multiply(r[A], safe_fetch(cell_to_address(M)));
+        /* NB. FMUL is 9u, MUL is 10 */
+        elapsed_time -= 1;
     } else
         multiply(r[A], get_V(), &r[A], &r[X]);
 }
@@ -381,6 +387,8 @@ static void do_div(void)
     if (6 == F) {
         check_float();
         r[A] = float_divide(r[A], safe_fetch(cell_to_address(M)));
+        /* NB. FDIV is 11u, DIV is 12u */
+        elapsed_time -= 1;
     } else
         divide(r[A], r[X], get_V(), &r[A], &r[X]);
 }
@@ -453,10 +461,13 @@ static void do_special(void)
     case 6: /* FLOT */
         check_float();
         r[A] = float_flot(r[A]);
+        elapsed_time += 2;
         break;
     case 7: /* FIX  */
         check_float();
         r[A] = float_fix(r[A]);
+        /* NB. in TAOCP no timing for FIX */
+        elapsed_time += 2;
         break;
     case 8: { /* NEG */
         check_binary();
@@ -464,13 +475,27 @@ static void do_special(void)
         r[A] = is_negative(r[A]) ? negative(cell) : cell;
         break;
     }
-    case 9: { /* XCH */
+    case 9: { /* INT */
+        check_interrupt();
+        if (normal_state == internal_state) {
+            save_state();
+            internal_state = control_state;
+            pc = -12;
+        } else {
+            restore_state();
+            internal_state = normal_state;
+            rti_done = true;
+        }
+        elapsed_time++;
+        break;
+    }
+    case 10: { /* XCH */
         check_binary();
         Cell cell = r[A];
         r[A] = r[X]; r[X] = cell;
         break;
     }
-    case 10: { /* XEQ */
+    case 11: { /* XEQ */
         check_master();
         xecute(cell_to_address(M), true);
         break;
@@ -515,20 +540,6 @@ static void do_shift(void)
     case 7: { /* SRB */
         check_binary();
         shift_right_binary(r[A], r[X], count, &r[A], &r[X]);
-        break;
-    }
-    case 9: { /* INT */
-        check_interrupt();
-        if (normal_state == internal_state) {
-            save_state();
-            internal_state = control_state;
-            pc = -12;
-        } else {
-            restore_state();
-            internal_state = normal_state;
-            rti_done = true;
-        }
-        elapsed_time++;
         break;
     }
     default: error("Unknown extended opcode");
@@ -669,6 +680,7 @@ static void do_compare(void)
     if (6 == F) {
         check_float();
         comparison_indicator = float_compare(r[A], cell);
+        elapsed_time += 2;
     } else
         compare(cell);
 }
@@ -683,8 +695,8 @@ static const struct {
     { do_sub, 2, "%SUB SUB SUB SUB SUB SUB FSUBU027" },
     { do_mul, 10, "%MUL MUL MUL MUL MUL MUL FMULU037" },
     { do_div, 12, "%DIV DIV DIV DIV DIV DIV FDIVU047" },
-    { do_special, 1, "*NUM CHARHLT AND OR  XOR FLOTFIX NEG XCH " },
-    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC SLB SRB U068INT " },
+    { do_special, 1, "*NUM CHARHLT AND OR  XOR FLOTFIX INT NEG XCH " },
+    { do_shift, 2, "*SLA SRA SLAXSRAXSLC SRC SLB SRB " },
     { do_move, 1, "MOV" },
 
     { do_lda, 2, "LDA" },
