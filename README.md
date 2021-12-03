@@ -17,7 +17,7 @@ Changes:
   * punch object card deck
   * GO button
   * MIXmaster instructions added: XEQ (execute), CPrM (CI = reg:M)
-  * indirect addressing
+  * indirect/double-addressing
   * UT-MIX instructions added: NEG, XCH
   * binary instructions: OR, XOR, AND, SLB, SRB, JrE, JrO
   * interrupt facility, real-time clock (INT instruction)
@@ -27,7 +27,7 @@ Changes:
   * count idle time waiting for I/O to complete
   * MinGW port
   * overlapping I/O buffer checks, incomplete I/O detection
-  * reference card (see mixref.pdf)
+  * [reference card](https://github.com/pahihu/mixal/blob/master/mixref.pdf)
   * card reader/punch and printer can use files instead of stdin/stdout
   * time dependent I/O (low-end Burroughs B5500 peripheral timing)
   * tape devices

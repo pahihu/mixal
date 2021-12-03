@@ -1,0 +1,72 @@
+standard
+        LDx  LDxN ENTx ENNx STx  STZ  STJ
+        ADD  INCx SUB  DECx MUL  DIV
+        SLA  SRA  SLAX SRAX SLC  SRC
+        CMPx
+        JL   JE   JG   JGE  JNE  JLE  JOV  JNOV
+        JMP  JSJ  JxN  JxZ  JxP  JxNN JxNZ JxNP
+        IN   OUT  IOC  JBUS JRED HLT
+        MOVE NUM  CHAR
+        NOP
+floating-point attachment
+        FADD FSUB FMUL FDIV FLOT FCMP   FIX
+        4u   4u   9u   11u  3u   4u
+        numbers are pre-normalized if not normalized on entry
+          when exponent underflow occurs in this stage, it is not signaled
+
+        if exponent overflow/underflow occurs during the normalization step
+          the overflow toggle is turned on, and the exponent is given modulo
+          the byte size
+        division by zero leaves undefined garbage in rA
+
+
+        FADD/FSUB
+          u=(eu,fu) v=(ev,fv)
+        A1. unpack u, v
+        A2. assume eu > ev
+        A3. ew := eu
+        A4. if eu - ev >= p + 2 (not necessary) go to A7
+        A5. shift fv to the right eu - ev places
+        A6. fw := fu + fv
+        A7. normalize (ew,fw)
+
+
+        Normalization
+        N1. if |f| > 1, go to N4
+            if f = 0, set e to lowest value and go to N7
+        N2. if |f| >= 1/b, go to N5
+        N3. shift f to the left by one digit, decrease e by 1, go to N2
+        N4. shift f to the right by one digit, increase e by 1
+        N5. round f to p places, if there are 2 nearest multiples, change
+            f to f' of b**(-p) such that b**p * f' + 0.5*b is odd
+            if |f| = 1, go to N4
+        N6. if e is too large, exponent overflow
+            if e is too small, exponent underflow
+        N7. pack e and f
+
+        
+        FMUL/FDIV
+        M1. unpack (convenient to test operands for zero)
+        M2. ew := eu + ev - q, fw := fu * fv
+            ew := eu - ev + q + 1, fw := (b**(-1)*fu)/fv
+            if |fu| < |fv| fw := fu/fv
+        M3. normalize
+
+
+        FCMP uses EPSILON at location 0, sets CI
+          EPSILON is fixed-point number, with the fraction point at the left
+
+        u < v, iff  v - u  >  EPSILON*max(b**(eu-q),b**(ev-q))
+        u ~ v, iff |v - u| <= EPSILON*max(b**(eu-q),b**(ev-q))
+        u > v, iff  u - v  >  EPSILON*max(b**(eu-q),b**(ev-q))
+
+interrupt facility
+        INT
+        control/normal state
+        real-time clock
+        IO interrupt on completion
+binary MIX
+        AND OR XOR NEG XCH SLB SRB JrE JrO
+MIXmaster (also binary + floating-point + interrupt)
+        XEQ CPrM
+        double/indirect-indexing
