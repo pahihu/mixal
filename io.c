@@ -83,13 +83,26 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* drum */      { "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,        4750,    0}, /* B430 */
-/* disk */      { "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,       12500,  500}, /* B475 */
-/* tape */      { "tape",   BIN_RWRITE, 7680, 100, tape_in, tape_out, tape_ioc,       13889, 5416}, /* B422 */
-/* card_in */   { "reader", TXT_RDONLY,    0,  16, text_in, no_out,   no_ioc,        150000,    0}, /* B122 */
-/* card_out */  { "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,        300000,    0}, /* B303 */
-/* printer */   { "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,    63158, 2500}, /* B320 */
-/* console */   { NULL,           NULL,    0,  14, console_in, console_out, no_ioc, 3500000,    0}  /* ASR33 */
+/* drum B430 52Kcps */
+{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,  4750,    0},
+
+/* disk B475 20Kcps */
+{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc, 12500,  500},
+
+/* tape B422 18Kcps */
+{ "tape",   BIN_RWRITE, 7680, 100, tape_in, tape_out, tape_ioc, 13889, 5416},
+
+/* card_in B122 200cpm */
+{ "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,  150000,    0},
+
+/* card_out B303 100cpm */
+{ "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,  300000,    0},
+
+/* printer B320 475lpm */
+{ "printer",TXT_APPEND,    0,  24, no_in,  text_out, printer_ioc, 63158, 2500},
+
+/* console ASR33 10cps */
+{ NULL,           NULL,    0,  14, console_in, console_out, no_ioc, 3500000, 0}
 
 };
 
