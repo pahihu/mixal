@@ -50,6 +50,8 @@ void error(const char *message, ...)
 {
     va_list args;
 
+    fflush(stdout);
+
     ++num_errors;
     va_start(args, message);
     if (error_handler)
@@ -144,6 +146,7 @@ static void usage()
     fprintf(stderr, "         -o             punch object deck\n");
     fprintf(stderr, "         -r             redirect reader/punch/printer\n");
     fprintf(stderr, "         -t n           trace instructions n times\n");
+    fprintf(stderr, "         -x             double/indirect-indexing attachment installed\n");
     exit(1);
 }
 
@@ -193,6 +196,7 @@ int main(int argc, char **argv)
                     if (++i == argc) usage();
                     set_trace_count(atol(argv[i]));
                     break;
+                case 'x': flags += MIXCONFIG_INDEX; break;
                 default: usage();
                 }
         }

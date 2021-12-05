@@ -190,14 +190,14 @@ static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
             error("Cannot access control store in normal state");
     }
 
-    if (dbg)
+    if (dbg > 2)
         fprintf(stderr, "io_mark_incomplete(%d,%d,%d)\n", buffer, block_size, mark);
     for (i = 0; i < block_size; i++) {
         if (memory_size <= magnitude(buffer + i))
             error("Address out of range -- io_mark_incomplete");
         current_count = fetch_incomplete(buffer + i);
         if (current_count + mark < 0) {
-            if (dbg)
+            if (dbg > 3)
                 fprintf(stderr, "current: %d, mark: %d\n", current_count, mark);
             error("Overlapping buffers -- io_mark_incomplete");
         }
@@ -208,12 +208,13 @@ static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
 static void io_schedule(Byte device, Operation operation, 
                         Cell argument, Cell offset, Address buffer)
 {
+    static char* operations[] = {"control", "read", "write"};
     unsigned busy, seek_time, u;
     enum DeviceType device_type;
     long position;
 
-    if (dbg)
-        fprintf(stderr,"io_schedule(%d, %d, %ld, %ld, %d)\n", device, operation, argument, offset, buffer);
+    if (dbg > 2)
+        fprintf(stderr,"io_schedule(%d, %s, %ld, %ld, %d)\n", device, operations[operation], argument, offset, buffer);
 
     devices[device].operation = operation;
     devices[device].argument  = argument;
@@ -249,6 +250,9 @@ static void io_schedule(Byte device, Operation operation,
             break;
         }
         busy *= seek_time;
+        /* NB. some code assumes devices are always busy after IOC */
+        if (0 == busy)
+            busy = 5;
     }
     else {
         if ((device_type != console) || (operation != input))
@@ -262,8 +266,9 @@ static void io_schedule(Byte device, Operation operation,
                            attributes(device)->block_size,
                            operation == input ? WRITE : READ);
     }
-    if (dbg)
-        fprintf(stderr,"io_schedule: busy = %d\n", busy);
+    if (dbg > 2) {
+        fprintf(stderr,"io_schedule: busy = %d next_scheduled_io = %u\n", busy, next_scheduled_io);
+    }
     devices[device].busy = busy;
 
     if (next_scheduled_io) {
@@ -284,10 +289,9 @@ static void do_io(Byte device)
     offset    = devices[device].offset;
     buffer    = devices[device].buffer;
 
-    if (dbg)
+    if (dbg > 1)
         fprintf(stderr,"do_io: device=%d operation=%d argument=%ld offset=%ld buffer=%d\n", device, operation, argument, offset, buffer);
 
-    ensure_open(device);
     current_device_type = devices[device].type;
     switch (operation) {
     case control:
@@ -321,6 +325,7 @@ static unsigned do_operation(Byte device, Operation operation,
         error("Interrupt pending - %02o", device);
     */
 
+    ensure_open(device);
     if (devices[device].busy) {
     /*
         clocks = devices[device].busy;
@@ -338,7 +343,6 @@ static unsigned do_operation(Byte device, Operation operation,
     if (attributes(device)->io_time)
         io_schedule(device, operation, argument, offset, buffer); 
     else {
-        ensure_open(device);
         switch (operation) {
         case control: attributes(device)->ioc_handler(device, argument, offset); break;
         case input:   attributes(device)->in_handler(device, argument, buffer); break;
@@ -654,7 +658,7 @@ void do_scheduled_io(unsigned clocks)
     int i;
     Byte device;
 
-    if (dbg)
+    if (dbg > 3)
         fprintf(stderr,"do_scheduled_io(%d)\n", clocks);
     for (i = 0; i < clocks; i++) {
         next_scheduled_io = (unsigned) -1;
@@ -828,7 +832,7 @@ void punch_object_deck(const char *title, Address start_address)
         }
     }
     if (num_cards) {
-        fprintf(card_punch, "TRANS0%04d", abs(start_address));
+        fprintf(card_punch, "TRANS0%04d\n", abs(start_address));
         fflush(card_punch);
     }
     fclose(card_punch);

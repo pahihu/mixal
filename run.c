@@ -763,16 +763,21 @@ static const struct {
     { do_compare, 2, "CMPX" },
 };
 
+
+static Flag F_used;
 static const char* mnemonic(Byte C, Byte F)
 {
     static char buffer[5];
     const char *ret = op_table[C].mnemonic;
     
+    F_used = false;
     if (*ret == '*') {
+        F_used = true;
         strncpy(buffer, ret + 1 + F * 4, 4);
         buffer[4] = '\0';
         ret = buffer;
     } else if (*ret == '%') {
+        F_used = true;
         strncpy(buffer, ret + 1 + (7 & F) * 4, 4);
         buffer[4] = '\0';
         ret = buffer;
@@ -784,6 +789,7 @@ void print_CPU_trace(Flag header)
 {
     Byte I = 0;
     Cell instruction;
+    const char *mnemo;
     
     IGNORE_VALUE(I);
 
@@ -798,7 +804,8 @@ void print_CPU_trace(Flag header)
     print_pc();
     printf (" %04d ", fetch_frequency(pc));
     print_cell (instruction);
-    printf (" %-4s ", mnemonic (C, F));
+    mnemo = mnemonic (C, F);
+    printf (" %-4s ", mnemo);
     print_cell (M);
     printf ("| ");
     print_cell (r[A]);
@@ -879,7 +886,7 @@ static void xecute(Address address, Flag save_context)
            /* (the add can't overflow because the numbers are too small) */
            M = add(M, r[I]);
        else {
-           if (0 == (mix_config & MIXCONFIG_MASTER))
+           if (0 == (mix_config & MIXCONFIG_INDEX))
                error("Not a Mixmaster. Invalid I-field: %02o", I);
            M = effective_address(pc);
        }

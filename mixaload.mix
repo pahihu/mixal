@@ -1,0 +1,1666 @@
+           ORIG 1000                                                            
+*                                                                               
+TAPE       EQU  0                                                               
+CR         EQU  16                                                              
+LP         EQU  18                                                              
+*                                                                               
+MAXSYMBOL  EQU  250                                                             
+*                                                                               
+* CHARACTER CONSTANT                                                            
+CHARA      ALF  AAAAA                                                           
+CHARO      ALF  00000                                                           
+CHAR9      ALF  99999                                                           
+CHARSTAR   ALF  *****                                                           
+CHARLEFTP  ALF  (((((                                                           
+CHARRIGHTP ALF  )))))                                                           
+CHARCOMMA  ALF  ,,,,,                                                           
+TWO        CON  2                                                               
+FIVE       CON  5                                                               
+EIGHT      CON  8                                                               
+CHAINEND   CON  4095                                                            
+*                                                                               
+*                                                                               
+*          TAPE BUFFER VARIABLES                                                
+*                                                                               
+FIRST      CON  *                                                               
+BUF1       ORIG *+100                                                           
+BUF2       ORIG *+100                                                           
+STOREBUF   CON  BUF1                                                            
+TAPEBUF    CON  BUF2                                                            
+TAPEBUFPTR CON  BUF1                                                            
+TAPECNTR   CON  100                                                             
+*                                                                               
+*                                                                               
+*          SUBROUTINE FINISHBUF                                                 
+*                                                                               
+*          LOADER WORDS TO BE WRITTEN TO TAPE FOR                               
+*          LOADING ARE STORED IN A BUFFER UNTIL 100                             
+*          WORDS ARE ACCUMULATED. THEN THIS ROUTINE                             
+*          IS CALLED TO DUMP THE BUFFER TO TAPE. DOUBLE                         
+*          BUFFERING IS USED.                                                   
+*                                                                               
+FINISHBUF  STJ  FIBEXIT                                                         
+           ST1  FIBSAVE1(0:2)                                                   
+           ST2  FIBSAVE2(0:2)                                                   
+*                                                                               
+           LD1  STOREBUF                                                        
+           OUT  0,1(TAPE)                                                       
+           LD2  TAPEBUF                                                         
+           ST2  STOREBUF                                                        
+           ST2  TAPEBUFPTR                                                      
+           ST1  TAPEBUF                                                         
+*                                                                               
+FIBSAVE1   ENT1 *                                                               
+FIBSAVE2   ENT2 *                                                               
+FIBEXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE TAPEOUT                                                   
+*                                                                               
+*          THIS SUBROUTINE ACCEPTS ONE WORD TO BE                               
+*          WRITTEN TO THE TAPE FOR THE LOADER AND                               
+*          STORES IT IN THE BUFFER UNTIL THE BUFFER IS                          
+*          FULL. THEN IT CALLS FINISHBUF TO EMPTY                               
+*          THE BUFFER.                                                          
+*                                                                               
+*          INPUT WORD IS IN THE A REGISTER                                      
+*                                                                               
+TAPEOUT    STJ  TOEXIT                                                          
+           ST1  TOSAVE1(0:2)                                                    
+*                                                                               
+           LD1  TAPEBUFPTR                                                      
+           STA  0,1                                                             
+           INC1 1                                                               
+           ST1  TAPEBUFPTR                                                      
+*                                                                               
+           LD1  TAPECNTR                                                        
+           DEC1 1                                                               
+           J1P  STILLROOM                                                       
+           JMP  FINISHBUF                                                       
+           ENT1 100                                                             
+*                                                                               
+STILLROOM  ST1  TAPECNTR                                                        
+*                                                                               
+TOSAVE1    ENT1 *                                                               
+TOEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+*          LOADER BLOCK VARIABLES                                               
+*                                                                               
+BLCKLENGTH CON  63                                                              
+LDRBLOCK   ORIG *+64                                                            
+NXTLOADLOC CON  0                                                               
+*                                                                               
+*          GENERATE                                                             
+*                                                                               
+*          GENERATE A WORD OF LOADER OUTPUT.                                    
+*          THE LOADER WORD IS IN VALUE. REGISTER I6 HAS                         
+*          THE ADDRESS OF THE LOCATION WHERE IT SHOULD                          
+*          BE LOADED. IF THIS WORD IS A CONTINUATION                            
+*          OF THE CURRENT BUFFER, IT IS SIMPLY STORED.                          
+*          IF THE WORD IS NONCONTIGUOUS OR FILLS THE                            
+*          BUFFER, THE BUFFER IS EMPTIED.                                       
+*                                                                               
+GNSAVEA    ORIG *+1                                                             
+*                                                                               
+GENERATE   STJ  GENEXIT                                                         
+           STA  GNSAVEA                                                         
+           ST1  GNSAVE1(0:2)                                                    
+*                                                                               
+           CMP6 NXTLOADLOC                                                      
+           JNE  FINISHBLCK                                                      
+*                                                                               
+           LD1  LDRBLOCK(4:5)                                                   
+           INC1 1                                                               
+           ST1  LDRBLOCK(4:5)                                                   
+*                                                                               
+           LDA  VALUE                                                           
+           STA  LDRBLOCK,1                                                      
+*                                                                               
+           INC6 1                                                               
+           ST6  NXTLOADLOC                                                      
+*                                                                               
+           CMP1 BLCKLENGTH                                                      
+           JGE  FINISHBLCK                                                      
+           LDA  GNSAVEA                                                         
+GNSAVE1    ENT1 *                                                               
+GENEXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE FINISHBLCK                                                
+*                                                                               
+*          OUTPUT TO THE LOADER THE BLOCK IN LDRBLOCK.                          
+*          NUMBER OF WORDS IS IN BYTE 4:5 OF FIRST WORD.                        
+*          (MAY BE ZERO, IN WHICH CASE IGNORE CALL).                            
+*          COMPUTE CHECKSUM AND OUTPUT IT TOO                                   
+*                                                                               
+CHECKSUM   ORIG *+1                                                             
+FLBSAVEA   ORIG *+1                                                             
+FINISHBLCK STJ  FLBEXIT                                                         
+           STA  FLBSAVEA                                                        
+           ST1  FLBSAVE1(0:2)                                                   
+*                                                                               
+           LD1  LDRBLOCK(4:5)                                                   
+           J1Z  FLBQUIT                                                         
+*                                                                               
+           STZ  CHECKSUM                                                        
+           ENT1 0                                                               
+*                                                                               
+BLOCKOUT   LDA  LDRBLOCK,1                                                      
+           JMP  TAPEOUT                                                         
+           ADD  CHECKSUM                                                        
+           STA  CHECKSUM                                                        
+*                                                                               
+           INC1 1                                                               
+           CMP1 LDRBLOCK(4:5)                                                   
+           JLE  BLOCKOUT                                                        
+*                                                                               
+           LDA  CHECKSUM                                                        
+           JMP  TAPEOUT                                                         
+*                                                                               
+           JOV  *+1                                                             
+*                                                                               
+FLBQUIT    STZ  LDRBLOCK                                                        
+           ST6  LDRBLOCK(0:2)                                                   
+*                                                                               
+           LDA  FLBSAVEA                                                        
+FLBSAVE1   ENT1 *                                                               
+FLBEXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+INBUF      ORIG *+16                                                            
+CARDNUMBER CON  0                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE READCARD                                                  
+*                                                                               
+*          READ THE NEXT CARD FROM THE CARD READER AND                          
+*          UNPACK IT INTO THE CHARACTER ARRAY CARD. THE                         
+*          CARD IS READ INTO THE BUFFER INBUF AND WE                            
+*          TRY TO KEEP THE CARD READER BUSY BY THIS                             
+*          DOUBLE BUFFERING.                                                    
+*                                                                               
+RCSAVEA    ORIG *+1                                                             
+*                                                                               
+READCARD   STJ  RCEXIT                                                          
+           STA  RCSAVEA                                                         
+           ST1  RCSAVE1(0:2)                                                    
+           ST2  RCSAVE2(0:2)                                                    
+           ST3  RCSAVE3(0:2)                                                    
+*                                                                               
+           JBUS *(CR)                                                           
+           ENT1 79                                                              
+           ENT2 15                                                              
+*                                                                               
+*          UNPACK CARD FROM RIGHT TO LEFT                                       
+*                                                                               
+NEXTWORD   LDA  INBUF,2                                                         
+           DEC2 1                                                               
+           ENT3 4                                                               
+*                                                                               
+NEXTCHAR   STA  CARD,1(5:5)                                                     
+           DEC1 1                                                               
+           J1N  CARDDONE                                                        
+           DEC3 1                                                               
+           J3N  NEXTWORD                                                        
+           SRA  1                                                               
+           JMP  NEXTCHAR                                                        
+*                                                                               
+CARDDONE   IN   INBUF(CR)                                                       
+           LDA  CARDNUMBER                                                      
+           INCA 1                                                               
+           STA  CARDNUMBER                                                      
+*                                                                               
+           LDA  RCSAVEA                                                         
+RCSAVE1    ENT1 *                                                               
+RCSAVE2    ENT2 *                                                               
+RCSAVE3    ENT3 *                                                               
+RCEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+SYM        ORIG *+2                                                             
+LETTER     ORIG *+1                                                             
+*                                                                               
+*                                                                               
+*          SUBROUTINE GETSYM                                                    
+*                                                                               
+*          GET THE NEXT SYMBOL FROM CARD(15) AND PACK                           
+*          IT INTO SYM UNTIL A DELIMITER. I5 WILL BE                            
+*          MOVED TO POINT TO THE DELIMITER. LETTER IS                           
+*          ZERO IF NO LETTER FOUND.                                             
+*                                                                               
+GSSAVEA    ORIG *+1                                                             
+GSSAVEX    ORIG *+1                                                             
+*                                                                               
+GETSYM     STJ  GSEXIT                                                          
+           STA  GSSAVEA                                                         
+           STX  GSSAVEX                                                         
+           ST1  GSSAVE1(0:2)                                                    
+           ST2  GSSAVE2(0:2)                                                    
+*                                                                               
+           ENT1 10                                                              
+           STZ  LETTER                                                          
+           ENTX 0                                                               
+           ENTA 0                                                               
+*                                                                               
+SCANSYM    LD2  CARD,5                                                          
+           CMP2 CHARA(5:5)                                                      
+           JL   ENDSYM                                                          
+           CMP2 CHAR9(5:5)                                                      
+           JG   ENDSYM                                                          
+           CMP2 CHARO(5:5)                                                      
+           JGE  *+2                                                             
+           STJ  LETTER(4:5)                                                     
+*                                                                               
+           DEC1 1                                                               
+           J1N  *+3                                                             
+           SLAX 1                                                               
+           INCX 0,2                                                             
+           INC5 1                                                               
+           JMP  SCANSYM                                                         
+*                                                                               
+SYMERROR   JMP  BADSYM                                                          
+           JMP  GSQUIT                                                          
+*                                                                               
+ENDSYM     J1N  SYMERROR                                                        
+           LD2  LETTER                                                          
+           J2Z  *+2                                                             
+           SLAX 0,1                                                             
+*                                                                               
+GSQUIT     STA  SYM                                                             
+           STX  SYM+1                                                           
+*                                                                               
+           LDA  GSSAVEA                                                         
+           LDX  GSSAVEX                                                         
+GSSAVE1    ENT1 *                                                               
+GSSAVE2    ENT2 *                                                               
+GSEXIT     JMP  *                                                               
+*                                                                               
+LABEL      ORIG *+2                                                             
+OP         ORIG *+1                                                             
+*                                                                               
+*                                                                               
+*          SUBROUTINE GETFIELDS                                                 
+*                                                                               
+*          GET THE FIELDS FOR THE ASSEMBLY LANGUAGE.                            
+*          FIELDS ARE LABEL, OPCODE AND OPERAND. LABEL                          
+*          MAY BE MISSING. REGISTER I5 IS LEFT                                  
+*          POINTING JUST BEFORE THE OPERAND.                                    
+*          THE EXPRESSION ROUTINE WILL SKIP ONE COLUMN                          
+*          TO BEGIN EVALUATION, SO LEAVE I5 ONE BEFORE                          
+*          THE START OF THE OPERAND.                                            
+*                                                                               
+*          FIXED FIELD                                                          
+*                                                                               
+GFSAVEA    ORIG *+1                                                             
+*                                                                               
+GETFIELDS  STJ  GFEXIT                                                          
+           STA  GFSAVEA                                                         
+           ST1  GFSAVE1(0:2)                                                    
+*                                                                               
+           STZ  LABEL                                                           
+           LDA  CARD                                                            
+           JAZ  NOLABEL                                                         
+           ENT5 0                                                               
+           JMP  GETSYM                                                          
+*                                                                               
+           LDA  LETTER                                                          
+           JANZ LEGALLABEL                                                      
+           JMP  BADSYM                                                          
+           JMP  NOLABEL                                                         
+*                                                                               
+LEGALLABEL ENT1 LABEL                                                           
+           MOVE SYM(2)                                                          
+*                                                                               
+NOLABEL    ENT5 11                                                              
+           JMP  GETSYM                                                          
+           LDA  SYM(1:4)                                                        
+           STA  OP                                                              
+*                                                                               
+           ENT5 15                                                              
+*                                 (COLUMN 17)                                   
+*                                                                               
+           LDA  GFSAVEA                                                         
+GFSAVE1    ENT1 *                                                               
+GFEXIT     JMP  *                                                               
+*                                                                               
+OPTAB      EQU  *                                                               
+           ALF  ADD A                                                           
+           ADD                                                                  
+           ALF  ALF D                                                           
+           CON  0                                                               
+           ALF  CHARA                                                           
+           CHAR                                                                 
+           ALF  CMPAA                                                           
+           CMPA                                                                 
+           ALF  CMPXA                                                           
+           CMPX                                                                 
+           ALF  CMP1A                                                           
+           CMP1                                                                 
+           ALF  CMP2A                                                           
+           CMP2                                                                 
+           ALF  CMP3A                                                           
+           CMP3                                                                 
+           ALF  CMP4A                                                           
+           CMP4                                                                 
+           ALF  CMP5A                                                           
+           CMP5                                                                 
+           ALF  CMP6A                                                           
+           CMP6                                                                 
+           ALF  CON C                                                           
+           CON  0                                                               
+           ALF  DECAA                                                           
+           DECA                                                                 
+           ALF  DECXA                                                           
+           DECX                                                                 
+           ALF  DEC1A                                                           
+           DEC1                                                                 
+           ALF  DEC2A                                                           
+           DEC2                                                                 
+           ALF  DEC3A                                                           
+           DEC3                                                                 
+           ALF  DEC4A                                                           
+           DEC4                                                                 
+           ALF  DEC5A                                                           
+           DEC5                                                                 
+           ALF  DEC6A                                                           
+           DEC6                                                                 
+           ALF  DIV A                                                           
+           DIV                                                                  
+           ALF  END F                                                           
+           CON  0                                                               
+           ALF  ENNAA                                                           
+           ENNA                                                                 
+           ALF  ENNXA                                                           
+           ENNX                                                                 
+           ALF  ENN1A                                                           
+           ENN1                                                                 
+           ALF  ENN2A                                                           
+           ENN2                                                                 
+           ALF  ENN3A                                                           
+           ENN3                                                                 
+           ALF  ENN4A                                                           
+           ENN4                                                                 
+           ALF  ENN5A                                                           
+           ENN5                                                                 
+           ALF  ENN6A                                                           
+           ENN6                                                                 
+           ALF  ENTAA                                                           
+           ENTA                                                                 
+           ALF  ENTXA                                                           
+           ENTX                                                                 
+           ALF  ENT1A                                                           
+           ENT1                                                                 
+           ALF  ENT2A                                                           
+           ENT2                                                                 
+           ALF  ENT3A                                                           
+           ENT3                                                                 
+           ALF  ENT4A                                                           
+           ENT4                                                                 
+           ALF  ENT5A                                                           
+           ENT5                                                                 
+           ALF  ENT6A                                                           
+           ENT6                                                                 
+           ALF  EQU E                                                           
+           CON  0                                                               
+           ALF  FADDA                                                           
+           FADD                                                                 
+           ALF  FCMPA                                                           
+           FCMP                                                                 
+           ALF  FDIVA                                                           
+           FDIV                                                                 
+           ALF  FMULA                                                           
+           FMUL                                                                 
+           ALF  FSUBA                                                           
+           FSUB                                                                 
+*                                                                               
+HLTINDEX   EQU  *-OPTAB/2                                                       
+           ALF  HLT A                                                           
+           HLT                                                                  
+           ALF  IN  A                                                           
+           IN                                                                   
+           ALF  INCAA                                                           
+           INCA                                                                 
+           ALF  INCXA                                                           
+           INCX                                                                 
+           ALF  INC1A                                                           
+           INC1                                                                 
+           ALF  INC2A                                                           
+           INC2                                                                 
+           ALF  INC3A                                                           
+           INC3                                                                 
+           ALF  INC4A                                                           
+           INC4                                                                 
+           ALF  INC5A                                                           
+           INC5                                                                 
+           ALF  INC6A                                                           
+           INC6                                                                 
+           ALF  IOC A                                                           
+           IOC                                                                  
+           ALF  JAE A                                                           
+           JAE                                                                  
+           ALF  JAN A                                                           
+           JAN                                                                  
+           ALF  JANNA                                                           
+           JANN                                                                 
+           ALF  JANPA                                                           
+           JANP                                                                 
+           ALF  JANZA                                                           
+           JANZ                                                                 
+           ALF  JAO A                                                           
+           JAO                                                                  
+           ALF  JAP A                                                           
+           JAP                                                                  
+           ALF  JAZ A                                                           
+           JAZ                                                                  
+           ALF  JBUSA                                                           
+           JBUS                                                                 
+           ALF  JE  A                                                           
+           JE                                                                   
+           ALF  JG  A                                                           
+           JG                                                                   
+           ALF  JGE A                                                           
+           JGE                                                                  
+           ALF  JL  A                                                           
+           JL                                                                   
+           ALF  JLE A                                                           
+           JLE                                                                  
+           ALF  JMP A                                                           
+           JMP                                                                  
+           ALF  JNE A                                                           
+           JNE                                                                  
+           ALF  JNOVA                                                           
+           JNOV                                                                 
+           ALF  JOV A                                                           
+           JOV                                                                  
+           ALF  JREDA                                                           
+           JRED                                                                 
+           ALF  JSJ A                                                           
+           JSJ                                                                  
+           ALF  JXE A                                                           
+           JXE                                                                  
+           ALF  JXN A                                                           
+           JXN                                                                  
+           ALF  JXNNA                                                           
+           JXNN                                                                 
+           ALF  JXNPA                                                           
+           JXNP                                                                 
+           ALF  JXNZA                                                           
+           JXNZ                                                                 
+           ALF  JXO A                                                           
+           JXO                                                                  
+           ALF  JXP A                                                           
+           JXP                                                                  
+           ALF  JXZ A                                                           
+           JXZ                                                                  
+           ALF  J1N A                                                           
+           J1N                                                                  
+           ALF  J1NNA                                                           
+           J1NN                                                                 
+           ALF  J1NPA                                                           
+           J1NP                                                                 
+           ALF  J1NZA                                                           
+           J1NZ                                                                 
+           ALF  J1P A                                                           
+           J1P                                                                  
+           ALF  J1Z A                                                           
+           J1Z                                                                  
+           ALF  J2N A                                                           
+           J2N                                                                  
+           ALF  J2NNA                                                           
+           J2NN                                                                 
+           ALF  J2NPA                                                           
+           J2NP                                                                 
+           ALF  J2NZA                                                           
+           J2NZ                                                                 
+           ALF  J2P A                                                           
+           J2P                                                                  
+           ALF  J2Z A                                                           
+           J2Z                                                                  
+           ALF  J3N A                                                           
+           J3N                                                                  
+           ALF  J3NNA                                                           
+           J3NN                                                                 
+           ALF  J3NPA                                                           
+           J3NP                                                                 
+           ALF  J3NZA                                                           
+           J3NZ                                                                 
+           ALF  J3P A                                                           
+           J3P                                                                  
+           ALF  J3Z A                                                           
+           J3Z                                                                  
+           ALF  J4N A                                                           
+           J4N                                                                  
+           ALF  J4NNA                                                           
+           J4NN                                                                 
+           ALF  J4NPA                                                           
+           J4NP                                                                 
+           ALF  J4NZA                                                           
+           J4NZ                                                                 
+           ALF  J4P A                                                           
+           J4P                                                                  
+           ALF  J4Z A                                                           
+           J4Z                                                                  
+           ALF  J5N A                                                           
+           J5N                                                                  
+           ALF  J5NNA                                                           
+           J5NN                                                                 
+           ALF  J5NPA                                                           
+           J5NP                                                                 
+           ALF  J5NZA                                                           
+           J5NZ                                                                 
+           ALF  J5P A                                                           
+           J5P                                                                  
+           ALF  J5Z A                                                           
+           J5Z                                                                  
+           ALF  J6N A                                                           
+           J6N                                                                  
+           ALF  J6NNA                                                           
+           J6NN                                                                 
+           ALF  J6NPA                                                           
+           J6NP                                                                 
+           ALF  J6NZA                                                           
+           J6NZ                                                                 
+           ALF  J6P A                                                           
+           J6P                                                                  
+           ALF  J6Z A                                                           
+           J6Z                                                                  
+           ALF  LDA A                                                           
+           LDA                                                                  
+           ALF  LDANA                                                           
+           LDAN                                                                 
+           ALF  LDX A                                                           
+           LDX                                                                  
+           ALF  LDXNA                                                           
+           LDXN                                                                 
+           ALF  LD1 A                                                           
+           LD1                                                                  
+           ALF  LD1NA                                                           
+           LD1N                                                                 
+           ALF  LD2 A                                                           
+           LD2                                                                  
+           ALF  LD2NA                                                           
+           LD2N                                                                 
+           ALF  LD3 A                                                           
+           LD3                                                                  
+           ALF  LD3NA                                                           
+           LD3N                                                                 
+           ALF  LD4 A                                                           
+           LD4                                                                  
+           ALF  LD4NA                                                           
+           LD4N                                                                 
+           ALF  LD5 A                                                           
+           LD5                                                                  
+           ALF  LD5NA                                                           
+           LD5N                                                                 
+           ALF  LD6 A                                                           
+           LD6                                                                  
+           ALF  LD6NA                                                           
+           LD6N                                                                 
+           ALF  MOVEA                                                           
+           MOVE                                                                 
+           ALF  MUL A                                                           
+           MUL                                                                  
+           ALF  NOP A                                                           
+           NOP                                                                  
+           ALF  NUM A                                                           
+           NUM                                                                  
+           ALF  ORIGB                                                           
+           CON  0                                                               
+           ALF  OUT A                                                           
+           OUT                                                                  
+           ALF  SLA A                                                           
+           SLA                                                                  
+           ALF  SLAXA                                                           
+           SLAX                                                                 
+           ALF  SLC A                                                           
+           SLC                                                                  
+           ALF  SRA A                                                           
+           SRA                                                                  
+           ALF  SRAXA                                                           
+           SRAX                                                                 
+           ALF  SRC A                                                           
+           SRC                                                                  
+           ALF  STA A                                                           
+           STA                                                                  
+           ALF  STJ A                                                           
+           STJ                                                                  
+           ALF  STX A                                                           
+           STX                                                                  
+           ALF  STZ A                                                           
+           STZ                                                                  
+           ALF  ST1 A                                                           
+           ST1                                                                  
+           ALF  ST2 A                                                           
+           ST2                                                                  
+           ALF  ST3 A                                                           
+           ST3                                                                  
+           ALF  ST4 A                                                           
+           ST4                                                                  
+           ALF  ST5 A                                                           
+           ST5                                                                  
+           ALF  ST6 A                                                           
+           ST6                                                                  
+           ALF  SUB A                                                           
+           SUB                                                                  
+*                                                                               
+NUMBEROPS  EQU  *-OPTAB/2                                                       
+*                                                                               
+OPTYPE     CON  0                                                               
+*                                                                               
+VALUE      ORIG *+1                                                             
+*                                                                               
+NSYMBOL    CON  0                                                               
+SYMINDEX   ORIG *+1                                                             
+SYMTAB     ORIG 4*MAXSYMBOL+*                                                   
+*                                                                               
+*                                                                               
+*          SUBROUTINE SEARCH OP                                                 
+*                                                                               
+*          SEARCH THE OPCODE TABLE (OPTAB) FOR THE                              
+*          OPCODE IN OP. A BINARY SEARCH IS USED. IF                            
+*          THE OPCODE IS NOT FOUND, AN UNOP ERROR                               
+*          OCCURS. A HLT IS USED FOR UNOP ERRORS. THE                           
+*          VALUE OF THE SECOND WORD IS                                          
+*          STORED IN VALUE AND THE TYPE OF THE OPCODE                           
+*          IN OPTYPE.                                                           
+*                                                                               
+SOPSAVEA   ORIG *+1                                                             
+SOPSAVEX   ORIG *+1                                                             
+OPHIGH     ORIG *+1                                                             
+OPLOW      ORIG *+1                                                             
+OPMID      ORIG *+1                                                             
+*                                                                               
+SEARCHOP   STJ  SOPEXIT                                                         
+           STA  SOPSAVEA                                                        
+           STX  SOPSAVEX                                                        
+           ST1  SOPSAVE1(0:2)                                                   
+*                                                                               
+           ENT1 NUMBEROPS-1                                                     
+           ST1  OPHIGH                                                          
+           STZ  OPLOW                                                           
+*                                                                               
+SOPLOOP    LDA  OPLOW                                                           
+           ADD  OPHIGH                                                          
+           SRAX 5                                                               
+           DIV  TWO                                                             
+           STA  OPMID                                                           
+           LD1  OPMID                                                           
+           INC1 0,1                                                             
+*                                                                               
+           LDA  OPTAB,1(1:4)                                                    
+           CMPA OP                                                              
+           JE   SOPFOUND                                                        
+*                                                                               
+           JL   UPLOW                                                           
+DOWNHIGH   LD1  OPMID                                                           
+           DEC1 1                                                               
+           ST1  OPHIGH                                                          
+           JMP  SOPDONE                                                         
+*                                                                               
+UPLOW      LD1  OPMID                                                           
+           INC1 1                                                               
+           ST1  OPLOW                                                           
+*          JMP  SOPDONE                                                         
+*                                                                               
+SOPDONE    LDA  OPHIGH                                                          
+           CMPA OPLOW                                                           
+           JGE  SOPLOOP                                                         
+*                                                                               
+           JMP  UNOP                                                            
+           ENT1 2*HLTINDEX                                                      
+*                                                                               
+SOPFOUND   LDA  OPTAB+1,1                                                       
+           STA  VALUE                                                           
+           LD1  OPTAB,1(5:5)                                                    
+           ST1  OPTYPE                                                          
+*                                                                               
+           LDA  SOPSAVEA                                                        
+           LDX  SOPSAVEX                                                        
+SOPSAVE1   ENT1 *                                                               
+SOPEXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE DEFINESYM                                                 
+*                                                                               
+*          DEFINE A SYMBOL. PUT IT IN THE SYMBOL                                
+*          TABLE. THE A REGISTER HAS ITS VALUE. THE                             
+*          FORWARD REFERENCE FIELD IS SET TO INDICATE                           
+*          NO FORWARD REFERENCES (YET) BY SETTING IT                            
+*          TO CHAINEND.                                                         
+*                                                                               
+DEFINESYM  STJ  DSEXIT                                                          
+           ST1  DSSAVE1(0:2)                                                    
+*                                                                               
+           LD1  NSYMBOL                                                         
+           STA  SYMTAB+2,1                                                      
+           LDA  SYM                                                             
+           STA  SYMTAB,1                                                        
+           LDA  SYM+1                                                           
+           STA  SYMTAB+1,1                                                      
+           LDA  CHAINEND                                                        
+           STA  SYMTAB+3,1(4:5)                                                 
+*                                                                               
+           ST1  SYMINDEX                                                        
+           INC1 4                                                               
+           ST1  NSYMBOL                                                         
+*                                                                               
+           LDA  SYMTAB-2,1                                                      
+DSSAVE1    ENT1 *                                                               
+DSEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE SEARCHSYM                                                 
+*                                                                               
+*          SEARCH SYMBOL TABLE. SYMBOL TABLE                                    
+*          IS SEARCHED FROM THE BACK TO THE FRONT.                              
+*          THE RESULT OF THE SEARCH IS RETURNED IN                              
+*          SYMINDEX. SYMINDEX IS AN INDEX INTO SYMTAB                           
+*          IF FOUND, OR NEGATIVE                                                
+*                                                                               
+SSSAVEA    ORIG *+1                                                             
+SSSAVEX    ORIG *+1                                                             
+*                                                                               
+SEARCHSYM  STJ  SSEXIT                                                          
+           STA  SSSAVEA                                                         
+           STX  SSSAVEX                                                         
+           ST1  SSSAVE1(0:2)                                                    
+*                                                                               
+           LDA  SYM                                                             
+           LDX  SYM+1                                                           
+           LD1  NSYMBOL                                                         
+*                                                                               
+SYMLOOP    DEC1 4                                                               
+           J1N  SYMDONE                                                         
+           CMPA SYMTAB,1(1:5)                                                   
+           JNE  SYMLOOP                                                         
+           CMPX SYMTAB+1,1(1:5)                                                 
+           JNE  SYMLOOP                                                         
+*                                                                               
+SYMDONE    ST1  SYMINDEX                                                        
+*                                                                               
+SSSAVE1    ENT1 *                                                               
+           LDA  SSSAVEA                                                         
+           LDX  SSSAVEX                                                         
+SSEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+UNDEFSYM   ORIG *+1                                                             
+NOFORWARD  CON  1                                                               
+*                                                                               
+*          UPPER AND LOWER BOUNDS FOR EXPRESSIONS                               
+*                                                                               
+HLBYTE     CON  0                                                               
+           CON  63                                                              
+HLADDR     CON  0                                                               
+           CON  3999                                                            
+HL2BYTE    CON  -4095                                                           
+           CON  +4095                                                           
+HLWORD     CON  -1073741823                                                     
+           CON  +1073741823                                                     
+*                                                                               
+*                                                                               
+OPERATOR   ORIG *+44                                                            
+           CON  1                                                               
+           CON  2                                                               
+           CON  3                                                               
+           CON  4                                                               
+           ORIG *+6                                                             
+           CON  5                                                               
+           ORIG *+10                                                            
+*                                                                               
+*                                                                               
+*          SUBROUTINE EVALSYM                                                   
+*                                                                               
+*          EVALUATE THE NEXT SYMBOL. VALUE RETURNED                             
+*          IN A. UNDEFSYM IS NONZERO IF VALUE IS                                
+*          UNDEFINED. SYMBOLS MAY BE *, NUMBER                                  
+*          OR SYMBOL. GETSYM IS USED TO GET NUMBERS                             
+*          OR SYMBOLS.                                                          
+*                                                                               
+ESSAVEX    ORIG *+1                                                             
+*                                                                               
+EVALSYM    STJ  ESEXIT                                                          
+           ST1  ESSAVE1(0:2)                                                    
+           STX  ESSAVEX                                                         
+*                                                                               
+           LDA  CARD,5                                                          
+           CMPA CHARSTAR(5:5)                                                   
+           JNE  NOTSTAR                                                         
+*                                                                               
+ISSTAR     INC5 1                                                               
+           ENTA 0,6                                                             
+           STZ  UNDEFSYM                                                        
+           JMP  ESQUIT                                                          
+*                                                                               
+NOTSTAR    JMP  GETSYM                                                          
+           LD1  LETTER                                                          
+           J1NZ ISSYMBOL                                                        
+*                                                                               
+ISNUMBER   LDA  SYM                                                             
+           LDX  SYM+1                                                           
+           NUM                                                                  
+           JOV  EXPOV                                                           
+           STZ  UNDEFSYM                                                        
+           JMP  ESQUIT                                                          
+*                                                                               
+ISSYMBOL   JMP  SEARCHSYM                                                       
+           LD1  SYMINDEX                                                        
+           J1N  ISNOTTHERE                                                      
+           LDA  SYMTAB,1                                                        
+           JAN  ISNOTDEF                                                        
+*                                                                               
+ISDEFINED  LDA  SYMTAB+2,1                                                      
+           STZ  UNDEFSYM                                                        
+           JMP  ESQUIT                                                          
+*                                                                               
+ISNOTTHERE ENTA -1                                                              
+           JMP  DEFINESYM                                                       
+           LD1  SYMINDEX                                                        
+           STA  SYMTAB,1(0:0)                                                   
+*                                                                               
+ISNOTDEF   LDA  SYMTAB+3,1                                                      
+           STJ  UNDEFSYM(4:5)                                                   
+           ST6  SYMTAB+3,1                                                      
+*                                                                               
+ESQUIT     EQU  *                                                               
+           LDX  ESSAVEX                                                         
+ESSAVE1    ENT1 *                                                               
+ESEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE EXPRESSION                                                
+*                                                                               
+*          EVALUATE THE NEXT EXPRESSION. EXPRESSION                             
+*          STARTS AT COLUMN+1 (COLUMN IN I5). (THE                              
+*          PLUS ONE IS TO SKIP OVER THE LAST DELIMITER)                         
+*          OPERANDS ARE EVALUATED BY EVALSYM.                                   
+*          OPERATORS ARE + - * / :                                              
+*          AND ARE APPLIED LEFT TO RIGHT UNTIL A                                
+*          DELIMITER IS FOUND.                                                  
+*                                                                               
+VALUE1     ORIG *+1                                                             
+VALUE2     ORIG *+1                                                             
+EXPSAVEX   ORIG *+1                                                             
+*                                                                               
+EXPRESSION STJ  EXPEXIT                                                         
+           ST1  EXPSAVE1(0:2)                                                   
+           ST2  EXPSAVE2(0:2)                                                   
+           STX  EXPSAVEX                                                        
+*                                                                               
+           INC5 1                                                               
+           JMP  EVALSYM                                                         
+*                                                                               
+EXPLOOP    LD2  CARD,5                                                          
+           LD2  OPERATOR,2                                                      
+           J2NP EXPOVER                                                         
+*                                                                               
+           LD1  UNDEFSYM                                                        
+           J1NZ FORERROR                                                        
+*                                                                               
+           INC5 1                                                               
+           STA  VALUE1                                                          
+           JMP  EVALSYM                                                         
+           STA  VALUE2                                                          
+           LDA  VALUE1                                                          
+           JMP  *,2                                                             
+           JMP  OPADD                                                           
+           JMP  OPSUB                                                           
+           JMP  OPMUL                                                           
+           JMP  OPDIV                                                           
+           JMP  OP8ADD                                                          
+*                                                                               
+OPADD      ADD  VALUE2                                                          
+           JMP  NEXTOP                                                          
+*                                                                               
+OPSUB      SUB  VALUE2                                                          
+           JMP  NEXTOP                                                          
+*                                                                               
+OPMUL      MUL  VALUE2                                                          
+           JANZ EXPOV                                                           
+           SLAX 5                                                               
+           JMP  NEXTOP                                                          
+*                                                                               
+OPDIV      SRAX 5                                                               
+           DIV  VALUE2                                                          
+           JMP  NEXTOP                                                          
+*                                                                               
+OP8ADD     MUL  EIGHT                                                           
+           JANZ EXPOV                                                           
+           SLAX 5                                                               
+           ADD  VALUE2                                                          
+           JMP  NEXTOP                                                          
+*                                                                               
+NEXTOP     JOV  EXPOV                                                           
+           JMP  EXPLOOP                                                         
+*                                                                               
+EXPOVER    LD1  UNDEFSYM                                                        
+           J1Z  EXPQUIT                                                         
+           LD1  NOFORWARD                                                       
+FORERROR   J1NZ ILLFOR                                                          
+*                                                                               
+EXPQUIT    EQU  *                                                               
+EXPSAVE1   ENT1 *                                                               
+           CMPA 0,1                                                             
+           JGE  *+3                                                             
+           JMP  EXPOV                                                           
+           LDA  0,1                                                             
+           CMPA 1,1                                                             
+           JLE  *+3                                                             
+           JMP  EXPOV                                                           
+           LDA  1,1                                                             
+*                                                                               
+           STJ  NOFORWARD(4:5)                                                  
+*                                                                               
+           LDX  EXPSAVEX                                                        
+EXPSAVE2   ENT2 *                                                               
+EXPEXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+*          PRINTER SELECTION FORMAT VARIABLES                                   
+*                                                                               
+PRT        CON  0                                                               
+ADR        EQU  4:4                                                             
+VAL        EQU  3:3                                                             
+INST       EQU  2:2                                                             
+LOC        EQU  1:1                                                             
+*                                                                               
+PRTFMT     CON  0                                                               
+           CON  1(LOC),1(INST)                                                  
+           CON  1(LOC),1(ADR)                                                   
+           CON  1(LOC),1(VAL)                                                   
+           CON  1(LOC),1(VAL)                                                   
+           CON  1(VAL)                                                          
+           CON  1(LOC),1(ADR)                                                   
+*                                                                               
+PRTBUF     ORIG *+24                                                            
+LINE       ORIG *+30                                                            
+CARD       ORIG *+80                                                            
+           ORIG *+10                                                            
+*                                                                               
+PRINTLOC   ORIG *+1                                                             
+*                                                                               
+*                                                                               
+*          SUBROUTINE OCTCHAR                                                   
+*                                                                               
+*          CONVERTS A NUMBER FROM A NUMERIC FORMAT INTO                         
+*          AN OCTAL CHARACTER REPRESENTATION.                                   
+*          CHARACTERS ARE STORED ONE PER WORD, SIGN FIRST,                      
+*          ZERO FILL. THE NUMBER IS IN THE A REGISTER,                          
+*          THE NUMBER OF CHARACTERS TO BE USED IN I2                            
+*          AND THE ADDRESS IN WHICH THEY SHOULD BE                              
+*          STORED IN REGISTER I1.                                               
+*                                                                               
+OCSAVEX    ORIG *+1                                                             
+OCTEMPA    ORIG *+1                                                             
+*                                                                               
+OCTCHAR    STJ  OCEXIT                                                          
+           STX  OCSAVEX                                                         
+*                                                                               
+           STA  OCTEMPA                                                         
+           STA  *+1(0:0)                                                        
+           ENTA 1                                                               
+           ENTX 44                                                              
+           JAP  STORESIGN                                                       
+           ENTX 45                                                              
+STORESIGN  STX  0,1                                                             
+           LDA  OCTEMPA(1:5)                                                    
+*                                                                               
+           INC1 0,2                                                             
+*                                                                               
+NXTDIGIT   SRAX 5                                                               
+           DIV  EIGHT                                                           
+           INCX 30                                                              
+           STX  0,1                                                             
+*                                                                               
+           DEC1 1                                                               
+           DEC2 1                                                               
+           J2P  NXTDIGIT                                                        
+*                                                                               
+           LDX  OCSAVEX                                                         
+OCEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+*                                                                               
+*          SUBROUTINE PRINTLINE                                                 
+*                                                                               
+*          PRINT A LINE FOR THE OUTPUT LISTING.                                 
+*          LINES CAN BE OF DIFFERENT TYPES.                                     
+*          THE FORMAT OF EACH LINE IS                                           
+*          DETERMINED BY PRTFMT(OPTYPE).                                        
+*                                                                               
+PLSAVEA    ORIG *+1                                                             
+PLSAVEX    ORIG *+1                                                             
+*                                                                               
+PRINTLINE  STJ  PLEXIT                                                          
+           STA  PLSAVEA                                                         
+           STX  PLSAVEX                                                         
+           ST1  PLSAVE1(0:2)                                                    
+           ST2  PLSAVE2(0:2)                                                    
+           ST3  PLSAVE3(0:2)                                                    
+*                                                                               
+           LD1  OPTYPE                                                          
+           STZ  OPTYPE                                                          
+           LDA  PRTFMT,1                                                        
+           STA  PRT                                                             
+*                                                                               
+*          CHECK IF LOCATION COUNTER TO BE PRINTED.                             
+*          IF SO PRINT IN COLUMNS 8-13.                                         
+*                                                                               
+           LDA  PRT(LOC)                                                        
+           JAZ  NOLOCPRT                                                        
+           LDA  PRINTLOC                                                        
+           ENT1 LINE+7                                                          
+           ENT2 4                                                               
+           JMP  OCTCHAR                                                         
+NOLOCPRT   EQU  *                                                               
+*                                                                               
+*                                                                               
+*          CHECK IF VALUE SHOULD BE PRINTED AS NUMBER                           
+*                                                                               
+           LDA  PRT(VAL)                                                        
+           JAZ  NOVALPRT                                                        
+           LDA  VALUE                                                           
+           ENT1 LINE+17                                                         
+           ENT2 10                                                              
+           JMP  OCTCHAR                                                         
+NOVALPRT   EQU  *                                                               
+*                                                                               
+*          PRINTVALUE AS AN ADDRESS FOR ORIG AND END                            
+*                                                                               
+           LDA  PRT(ADR)                                                        
+           JAZ  NOADRPRT                                                        
+           LDA  VALUE                                                           
+           ENT1 LINE+23                                                         
+           ENT2 4                                                               
+           JMP  OCTCHAR                                                         
+NOADRPRT   EQU  *                                                               
+*                                                                               
+*          CHECK IF VALUE SHOULD BE AN INSTRUCTION                              
+*                                                                               
+           LDA  PRT(INST)                                                       
+           JAZ  NOOPPRT                                                         
+           LDA  VALUE(0:2)                                                      
+           ENT1 LINE+14                                                         
+           ENT2 4                                                               
+           JMP  OCTCHAR                                                         
+*                                                                               
+           LDA  VALUE(3:3)                                                      
+           ENT1 LINE+19                                                         
+           ENT2 2                                                               
+           JMP  OCTCHAR                                                         
+           STZ  LINE+19                                                         
+*                                                                               
+           LDA  VALUE(4:4)                                                      
+           ENT1 LINE+22                                                         
+           ENT2 2                                                               
+           JMP  OCTCHAR                                                         
+           STZ  LINE+22                                                         
+*                                                                               
+           LDA  VALUE(5:5)                                                      
+           ENT1 LINE+25                                                         
+           ENT2 2                                                               
+           JMP  OCTCHAR                                                         
+           STZ  LINE+25                                                         
+*                                                                               
+NOOPPRT    EQU  *                                                               
+*                                                                               
+*          CARD IMAGE IS ALREADY IN LINE IMAGE IN CARD.                         
+*          NOW APPEND CARD NUMBER. CARD NUMBER IS                               
+*          DECIMAL, SO WE USE CHAR, BUT THEN MUST                               
+*          SUPPRESS LEADING ZEROS.                                              
+*                                                                               
+           LDA  CARDNUMBER                                                      
+           CHAR                                                                 
+           ENT1 LINE+110                                                        
+*                                                                               
+LEADZERO   STZ  0,1                                                             
+           INC1 1                                                               
+           ENTA 0                                                               
+           SLC  1                                                               
+           CMPA CHARO(5:5)                                                      
+           JE   LEADZERO                                                        
+*                                                                               
+STRCHR     STA  0,1                                                             
+           JXZ  ENDCARDNUM                                                      
+           INC1 1                                                               
+           ENTA 0                                                               
+           SLC  1                                                               
+           JMP  STRCHR                                                          
+ENDCARDNUM EQU  *                                                               
+*                                                                               
+           JBUS *(LP)                                                           
+*                                                                               
+*          NOW OUTPUT LINE MUST BE PACKED INTO BUFFER                           
+*                                                                               
+           ENT1 119                                                             
+           ENT2 24                                                              
+*                                                                               
+PCKWORD    ENT3 5                                                               
+           ENTX 0                                                               
+*                                                                               
+PCKCHAR    LDA  LINE,1                                                          
+           STZ  LINE,1                                                          
+           DEC1 1                                                               
+           SRC  1                                                               
+           DEC3 1                                                               
+           J3P  PCKCHAR                                                         
+           DEC2 1                                                               
+           STX  PRTBUF,2                                                        
+           J2P  PCKWORD                                                         
+*                                                                               
+           OUT  PRTBUF(LP)                                                      
+*                                                                               
+           LDA  LINERROR                                                        
+           ADD  NERROR                                                          
+           STA  NERROR                                                          
+           STZ  LINERROR                                                        
+*                                                                               
+           LDA  PLSAVEA                                                         
+           LDX  PLSAVEX                                                         
+PLSAVE1    ENT1 *                                                               
+PLSAVE2    ENT2 *                                                               
+PLSAVE3    ENT3 *                                                               
+PLEXIT     JMP  *                                                               
+*                                                                               
+NERROR     CON  0                                                               
+LINERROR   CON  0                                                               
+*                                                                               
+*          SUBROUTINE ERROR                                                     
+*                                                                               
+*          THIS SUBROUTINE PUTS AN ERROR FLAG INTO THE                          
+*          OUTPUT LINE IMAGE AND COUNTS THE NUMBER OF                           
+*          ERRORS PER LINE. UP TO 5 ERROR FLAGS WILL BE                         
+*          SIGNALLED. THE ERROR FLAG IS THE CHARACTER IN                        
+*          BYTE 1:1 OF THE WORD FOLLOWING THE CALL TO                           
+*          ERROR.                                                               
+*                                                                               
+ERRSAVA    ORIG *+1                                                             
+*                                                                               
+ERROR      STJ  *+3(0:2)                                                        
+           STA  ERRSAVA                                                         
+           ST1  ERRSAVE1(0:2)                                                   
+*                                                                               
+           ENT1 *                                                               
+           LDA  0,1(1:1)                                                        
+           INC1 1                                                               
+           ST1  ERREXIT(0:2)                                                    
+*                                                                               
+           LD1  LINERROR                                                        
+           INC1 1                                                               
+           ST1  LINERROR                                                        
+*                                                                               
+           DEC1 5                                                               
+           J1P  *+2                                                             
+           STA  LINE+5,1                                                        
+*                                                                               
+           LDA  ERRSAVA                                                         
+ERRSAVE1   ENT1 *                                                               
+ERREXIT    JMP  *                                                               
+*                                                                               
+*                                                                               
+*          A SEPARATE ERROR ROUTINE FOR EACH TYPE.                              
+*                                                                               
+MULDEF     STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  M                                                               
+           JMP  *                                                               
+*                                                                               
+BADSYM     STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  L                                                               
+           JMP  *                                                               
+*                                                                               
+UNOP       STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  U                                                               
+           JMP  *                                                               
+*                                                                               
+ILLFOR     STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  F                                                               
+           JMP  *                                                               
+*                                                                               
+EXPOV      STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  O                                                               
+           JMP  *                                                               
+*                                                                               
+ILLSYN     STJ  *+3                                                             
+           JMP  ERROR                                                           
+           ALF  S                                                               
+           JMP  *                                                               
+*          SUBROUTINE DEFINELAB                                                 
+*                                                                               
+*          DEFINE A LABEL IF THERE IS ONE. THE VALUE                            
+*          OF THE LABEL IS IN THE A REGISTER. FIRST                             
+*          SEARCH THE SYMBOL TABLE FOR MULTIPLY                                 
+*          DEFINED LABELS OR FORWARD REFERENCES.                                
+*                                                                               
+DEFINELAB  STJ  DLEXIT                                                          
+           ST1  DLSAVE1(0:2)                                                    
+           ST2  DLSAVE2(0:2)                                                    
+*                                                                               
+           LD1  LABEL(1:1)                                                      
+           J1Z  DLSAVE1                                                         
+*                                                                               
+           ENT1 SYM                                                             
+           MOVE LABEL(2)                                                        
+*                                                                               
+           JMP  SEARCHSYM                                                       
+*                                                                               
+           LD1  SYMINDEX                                                        
+           J1N  NEWLABDEFN                                                      
+*                                                                               
+           LD2  SYMTAB,1(0:1)                                                   
+           J2P  MULDEF                                                          
+*                                                                               
+           STA  SYMTAB+2,1                                                      
+           STZ  SYMTAB,1(0:0)                                                   
+           JMP  DLSAVE1                                                         
+*                                                                               
+NEWLABDEFN JMP  DEFINESYM                                                       
+*                                                                               
+DLSAVE1    ENT1 *                                                               
+DLSAVE2    ENT2 *                                                               
+DLEXIT     JMP  *                                                               
+*                                                                               
+*                                                                               
+*          MAIN LOOP STARTS HERE                                                
+*                                                                               
+MAIN       STJ  ENDMAIN                                                         
+           JMP  INITIALIZE                                                      
+*                                                                               
+MAINLOOP   JMP  READCARD                                                        
+*                                                                               
+           LDA  CARD                                                            
+           CMPA CHARSTAR(5:5)                                                   
+           JE   PRTLINE                                                         
+*                                                                               
+           JMP  GETFIELDS                                                       
+           JMP  SEARCHOP                                                        
+*                                                                               
+           ST6  PRINTLOC                                                        
+*                                                                               
+           LD1  OPTYPE                                                          
+           JMP  *+1,1                                                           
+           JMP  PRTLINE                                                         
+           JMP  MACHINEOP                                                       
+           JMP  ORIGOP                                                          
+           JMP  CONOP                                                           
+           JMP  ALFOP                                                           
+           JMP  EQUOP                                                           
+           JMP  ENDOP                                                           
+*                                                                               
+*                                                                               
+ENDCASE    LDA  CARD,5                                                          
+           JANZ ILLSYN                                                          
+*                                                                               
+PRTLINE    JMP  PRINTLINE                                                       
+           LDA  ENDASSEM                                                        
+           JAZ  MAINLOOP                                                        
+           JMP  FINISHUP                                                        
+ENDMAIN    JMP  *                                                               
+MACHINEOP  ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+*                                                                               
+           ENT1 HL2BYTE                                                         
+           STZ  NOFORWARD                                                       
+           JMP  EXPRESSION                                                      
+           STA  VALUE(0:2)                                                      
+*                                                                               
+           LDA  CARD,5                                                          
+           CMPA CHARCOMMA(5:5)                                                  
+           JNE  NOIPART                                                         
+*                                                                               
+IPART      ENT1 HLBYTE                                                          
+           JMP  EXPRESSION                                                      
+           STA  VALUE(3:3)                                                      
+NOIPART    EQU  *                                                               
+*                                                                               
+           LDA  CARD,5                                                          
+           CMPA CHARLEFTP(5:5)                                                  
+           JNE  NOFPART                                                         
+           ENT1 HLBYTE                                                          
+           JMP  EXPRESSION                                                      
+           STA  VALUE(4:4)                                                      
+*                                                                               
+           LDA  CARD,5                                                          
+           CMPA CHARRIGHTP(5:5)                                                 
+           JNE  ILLSYN                                                          
+           INC5 1                                                               
+NOFPART    EQU  *                                                               
+*                                                                               
+           JMP  GENERATE                                                        
+           JMP  ENDCASE                                                         
+*                                                                               
+*                                                                               
+EQUOP      ENT1 HLWORD                                                          
+           JMP  EXPRESSION                                                      
+           STA  VALUE                                                           
+           JMP  DEFINELAB                                                       
+           JMP  ENDCASE                                                         
+*                                                                               
+*                                                                               
+ORIGOP     ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+*                                                                               
+           ENT1 HLADDR                                                          
+           JMP  EXPRESSION                                                      
+*                                                                               
+           STA  VALUE                                                           
+           LD6  VALUE                                                           
+*                                                                               
+           JMP  ENDCASE                                                         
+ALFOP      ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+*                                                                               
+           ENT1 16                                                              
+           LDA  CARD,1                                                          
+           ENT2 4                                                               
+*                                                                               
+NXTALFCHAR INC1 1                                                               
+           SLA  1                                                               
+           ADD  CARD,1(5:5)                                                     
+           DEC2 1                                                               
+           J2P  NXTALFCHAR                                                      
+*                                                                               
+           STA  VALUE                                                           
+           JMP  GENERATE                                                        
+           JMP  ENDCASE                                                         
+*                                                                               
+CONTEMPVAL ORIG *+1                                                             
+CONTEMP    ORIG *+1                                                             
+*                                                                               
+CONOP      ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+*                                                                               
+           STZ  VALUE                                                           
+*                                                                               
+NEXTCON    ENT1 HLWORD                                                          
+           JMP  EXPRESSION                                                      
+*                                                                               
+           LDX  CARD,5                                                          
+           CMPX CHARLEFTP(5:5)                                                  
+           JE   CONF                                                            
+           STA  VALUE                                                           
+           JMP  NOF                                                             
+*                                                                               
+CONERROR   JMP  ILLSYN                                                          
+           JMP  NOFSTORE                                                        
+*                                                                               
+CONF       STA  CONTEMPVAL                                                      
+           ENT1 HLBYTE                                                          
+           JMP  EXPRESSION                                                      
+*                                                                               
+           STA  FMOD(4:4)                                                       
+*                                                                               
+           SRAX 5                                                               
+           DIV  EIGHT                                                           
+           CMPX FIVE                                                            
+           JG   CONERROR                                                        
+           STA  CONTEMP                                                         
+           CMPX CONTEMP                                                         
+           JL   CONERROR                                                        
+           LDA  CONTEMPVAL                                                      
+FMOD       STA  VALUE(0)                                                        
+*                                                                               
+NOFSTORE   LDA  CARD,5                                                          
+           CMPA CHARRIGHTP(5:5)                                                 
+           JNE  ILLSYN                                                          
+           INC5 1                                                               
+NOF        EQU  *                                                               
+*                                                                               
+           LDA  CARD,5                                                          
+           CMPA CHARCOMMA(5:5)                                                  
+           JE   NEXTCON                                                         
+*                                                                               
+           JMP  GENERATE                                                        
+           JMP  ENDCASE                                                         
+ENDASSEM   CON  0                                                               
+STARTADD   CON  0                                                               
+*                                                                               
+*                                                                               
+ENDOP      ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+*                                                                               
+           ENT1 HLADDR                                                          
+           JMP  EXPRESSION                                                      
+           STA  VALUE                                                           
+           STA  STARTADD                                                        
+           STJ  ENDASSEM(4:5)                                                   
+           JMP  ENDCASE                                                         
+*                                                                               
+INITIALIZE STJ  INITEXIT                                                        
+           IN   INBUF(CR)                                                       
+           IOC  0(TAPE)                                                         
+           ENT6 0                                                               
+INITEXIT   JMP  *                                                               
+*                                                                               
+ASMDEF     ALF                                                                  
+           ORIG *+1                                                             
+           ALF                                                                  
+           ORIG *+5                                                             
+           ALF  ORIG                                                            
+           ALF  *+1                                                             
+           ORIG *+3                                                             
+           ALF  SYMBO                                                           
+           ALF  L DEF                                                           
+           ALF  INED                                                            
+           ALF  BY AS                                                           
+           ALF  SEMBL                                                           
+           ALF  ER                                                              
+           ORIG *+5                                                             
+*                                                                               
+*                                                                               
+*          SUBROUTINE FINISH UP                                                 
+*                                                                               
+*          WHEN AN END CARD IS READ, WE MUST FINISH                             
+*          LAST LOADER BLOCK, OUTPUT FORWARD REFERENCE                          
+*          FIX-UP COMMANDS, AND START ADDRESS.                                  
+*                                                                               
+FINTEMP    ORIG *+5                                                             
+*                                                                               
+FINISHUP   STJ  FINEXIT                                                         
+           JMP  FINISHBLCK                                                      
+*                                                                               
+*          CHECK FOR UNDEFINED SYMBOLS AND DEFINE THEM                          
+*                                                                               
+           ENTA 1                                                               
+           STA  VALUE(0:3)                                                      
+*                                                                               
+           ENT3 0                                                               
+NEXTSYM1   LDA  SYMTAB,3                                                        
+           JAP  DENFDSYM                                                        
+*                                                                               
+           STA  LABEL(1:5)                                                      
+           STA  ASMDEF+6(1:5)                                                   
+           LDA  SYMTAB+1,3                                                      
+           STA  LABEL+1                                                         
+           STA  ASMDEF+7                                                        
+           ENTA 0,6                                                             
+           JMP  DEFINELAB                                                       
+           INC6 1                                                               
+*                                                                               
+           ENTA -1,6                                                            
+           ENT1 FINTEMP                                                         
+           ENT2 4                                                               
+           JMP  OCTCHAR                                                         
+*                                                                               
+           LDA  FINTEMP                                                         
+           STA  ASMDEF+1(3:3)                                                   
+           LDA  FINTEMP+1                                                       
+           STA  ASMDEF+1(4:4)                                                   
+           LDA  FINTEMP+2                                                       
+           STA  ASMDEF+1(5:5)                                                   
+           LDA  FINTEMP+3                                                       
+           STA  ASMDEF+2(1:1)                                                   
+           LDA  FINTEMP+4                                                       
+           STA  ASMDEF+2(2:2)                                                   
+*                                                                               
+           OUT  ASMDEF(LP)                                                      
+           JBUS *(LP)                                                           
+*                                                                               
+DENFDSYM   EQU  *                                                               
+*                                                                               
+           LDA  SYMTAB+3,3(4:5)                                                 
+           CMPA CHAINEND                                                        
+           JE   UPSYM1                                                          
+*                                                                               
+           STA  VALUE(4:5)                                                      
+           LDA  SYMTAB+2,3(4:5)                                                 
+           STA  VALUE(0:2)                                                      
+           LDA  VALUE                                                           
+           JMP  TAPEOUT                                                         
+*                                                                               
+UPSYM1     INC3 4                                                               
+           CMP3 NSYMBOL                                                         
+           JL   NEXTSYM1                                                        
+*                                                                               
+           LDA  STARTADD                                                        
+           STA  VALUE(0:2)                                                      
+           ENTA 2                                                               
+           STA  VALUE(3:3)                                                      
+           STZ  VALUE(4:5)                                                      
+           LDA  VALUE                                                           
+           JMP  TAPEOUT                                                         
+*                                                                               
+           JMP  FINISHBUF                                                       
+*                                                                               
+FINEXIT    JMP  *                                                               
+*                                                                               
+*          LOADER ROUTINE                                                       
+*                                                                               
+*                                                                               
+           ORIG 3680                                                            
+* FIRST    CON  *
+* BUF1     ORIG *+100
+* BUF2     ORIG *+100
+*                                                                               
+CHKSUM     ORIG *+1                                                             
+HEADER     ORIG *+1                                                             
+*                                                                               
+CHKMSG     ALF  CHECK                                                           
+           ALF  SUM E                                                           
+           ALF  RROR                                                            
+HDRMSG     ALF  ERROR                                                           
+           ALF   IN H                                                           
+           ALF  EADER                                                           
+*                                                                               
+ERRORLINE  ALF  ***                                                             
+ERRORMSG   ORIG *+3                                                             
+           ALF                                                                  
+           ALF    BLO                                                           
+           ALF  CK =                                                            
+ERRORBLK   ORIG *+1                                                             
+           ALF                                                                  
+           ALF   HEAD                                                           
+           ALF  ER =                                                            
+ERRORLA    ORIG *+1                                                             
+           ALF  (LA),                                                           
+           ALF                                                                  
+ERRORN     ORIG *+1                                                             
+           ALF  (N)                                                             
+           ORIG *+8                                                             
+*                                                                               
+LOADER     IN   BUF1(TAPE)                                                      
+           ENT3 0                                                               
+*                                                                               
+NEXTBLOCK  JMP  INPUT                                                           
+           STA  CHKSUM                                                          
+           STA  HEADER                                                          
+           INC3 1                                                               
+*                                                                               
+           LD1  HEADER(0:2)                                                     
+           LD2  HEADER(4:5)                                                     
+           LD4  HEADER(3:3)                                                     
+           DEC4 2                                                               
+           J4Z  0,1                                                             
+           INC4 1                                                               
+           J4NZ LLL                                                             
+           ST1  0,2(0:2)                                                        
+           JMP  NEXTBLOCK                                                       
+LLL        J1N  HDRERROR                                                        
+           CMP1 FIRST                                                           
+           JGE  HDRERROR                                                        
+*                                                                               
+           ENTA -1,2                                                            
+           INCA 0,1                                                             
+           CMPA FIRST                                                           
+           JGE  HDRERROR                                                        
+*                                                                               
+LOADLOOP   JMP  INPUT                                                           
+           STA  0,1                                                             
+           INC1 1                                                               
+           ADD  CHKSUM                                                          
+           STA  CHKSUM                                                          
+           DEC2 1                                                               
+           J2P  LOADLOOP                                                        
+*                                                                               
+           JMP  INPUT                                                           
+           CMPA CHKSUM                                                          
+           JE   NEXTBLOCK                                                       
+*                                                                               
+CHKSUMERR  ENT2 CHKMSG                                                          
+           JMP  LERROR                                                          
+*                                                                               
+HDRERROR   ENT2 HDRMSG                                                          
+*                                                                               
+           JMP  LERROR                                                          
+*                                                                               
+LERROR     ENT1 ERRORMSG                                                        
+           MOVE 0,2(3)                                                          
+           ENTA 0,3                                                             
+           CHAR                                                                 
+           STX  ERRORBLK                                                        
+           LDA  HEADER(0:2)                                                     
+           CHAR                                                                 
+           STX  ERRORLA(2:5)                                                    
+           LDA  HEADER(4:5)                                                     
+           CHAR                                                                 
+           STX  ERRORN(2:5)                                                     
+           OUT  ERRORLINE(LP)                                                   
+           HLT                                                                  
+*                                                                               
+*                                                                               
+*         DATA FOR INPUT SUBROUTINE                                             
+*                                                                               
+ADDR       ORIG *+1                                                             
+COUNT      CON  0                                                               
+INPUTBUF   CON  BUF1                                                            
+USINGBUF   CON  BUF2                                                            
+*                                                                               
+*                                                                               
+INPUT      STJ  EXITINPUT                                                       
+           ST1  TEMP1(0:2)                                                      
+           ST2  TEMP2(0:2)                                                      
+*                                                                               
+           LD1  COUNT                                                           
+           J1P  RETURNWORD                                                      
+*                                                                               
+*                                                                               
+           LD1  USINGBUF                                                        
+           IN   0,1(TAPE)                                                       
+           LD2  INPUTBUF                                                        
+           ST2  USINGBUF                                                        
+           ST2  ADDR                                                            
+           ST1  INPUTBUF                                                        
+           ENT1 100                                                             
+*                                                                               
+*                                                                               
+RETURNWORD LD2  ADDR                                                            
+           LDA  0,2                                                             
+           INC2 1                                                               
+           ST2  ADDR                                                            
+           DEC1 1                                                               
+           ST1  COUNT                                                           
+*                                                                               
+TEMP2      ENT2 *                                                               
+TEMP1      ENT1 *                                                               
+EXITINPUT  JMP  *                                                               
+*                                                                               
+MIXAL      JMP  MAIN                                                            
+           IOC  0(0)                                                            
+           JMP  LOADER                                                          
+           END  MIXAL                                                           
+                                                                                

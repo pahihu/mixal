@@ -20,6 +20,7 @@ void set_wait_state(void);                          /* set wait state */
 #define MIXCONFIG_FLOAT     (  4U)                  /* FP attachment */
 #define MIXCONFIG_CORE      (  8U)                  /* core memory */
 #define MIXCONFIG_PUSHGO    ( 16U)                  /* push GO button */
+#define MIXCONFIG_INDEX     ( 32U)                  /* dble/indirect-indexing */
 #define MIXCONFIG_MASTER    (128U)                  /* Mixmaster */
 void set_configuration(unsigned flags);             /* set MIX configuration */
 
