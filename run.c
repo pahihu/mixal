@@ -59,6 +59,8 @@ unsigned frequency[memory_size];            /* frequency counts */
 unsigned control_frequency[memory_size];    /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
 unsigned mix_config = 0;                    /* MIX configuration */
+Cell INDEX_MAX;
+             /* max. index register value (2bytes standard, 5bytes Mixmaster) */
 
 #define A 0
 #define X 7
@@ -122,8 +124,11 @@ static void init_configuration(void)
 
 void set_configuration(unsigned flags)
 {
-    if (MIXCONFIG_MASTER & flags)
+    INDEX_MAX = ((1L << 12) - 1);
+    if (MIXCONFIG_MASTER & flags) {
         flags = (unsigned) -1;
+        INDEX_MAX = CELL_MAX;
+    }
     mix_config |= flags;
 
     init_configuration();
@@ -757,14 +762,14 @@ static const struct {
     { do_reg_branch, 1, "*J6N J6Z J6P J6NNJ6NZJ6NPJ6E J6O" },
     { do_reg_branch, 1, "*JXN JXZ JXP JXNNJXNZJXNPJXE JXO" },
 
-    { do_addr_op, 1, "*INCADECAENTAENNACPAM" },
-    { do_addr_op, 1, "*INC1DEC1ENT1ENN1CP1M" },
-    { do_addr_op, 1, "*INC2DEC2ENT2ENN2CP2M" },
-    { do_addr_op, 1, "*INC3DEC3ENT3ENN3CP3M" },
-    { do_addr_op, 1, "*INC4DEC4ENT4ENN4CP4M" },
-    { do_addr_op, 1, "*INC5DEC5ENT5ENN5CP5M" },
-    { do_addr_op, 1, "*INC6DEC6ENT6ENN6CP6M" },
-    { do_addr_op, 1, "*INCXDECXENTXENNXCPXM" },
+    { do_addr_op, 1, "*INCADECAENTAENNACPMA" },
+    { do_addr_op, 1, "*INC1DEC1ENT1ENN1CPM1" },
+    { do_addr_op, 1, "*INC2DEC2ENT2ENN2CPM2" },
+    { do_addr_op, 1, "*INC3DEC3ENT3ENN3CPM3" },
+    { do_addr_op, 1, "*INC4DEC4ENT4ENN4CPM4" },
+    { do_addr_op, 1, "*INC5DEC5ENT5ENN5CPM5" },
+    { do_addr_op, 1, "*INC6DEC6ENT6ENN6CPM6" },
+    { do_addr_op, 1, "*INCXDECXENTXENNXCPMX" },
 
     { do_compare, 2, "%CMPACMPACMPACMPACMPACMPAFCMPU707" },
     { do_compare, 2, "CMP1" },

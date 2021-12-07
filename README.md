@@ -12,6 +12,8 @@ If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](ht
 
 Changes:
 
+  * changed CPrM syntax to CPMr (CI = reg:M), r1-r6 is 5bytes + sign
+    in Mixmaster mode
   * fixed shifts, punch object card deck, NUM handles overpunch,
     debugged I/O, runs Peterson's load-and-go assembler (see `runprimes`)
   * fixed INT encoding (C=5,F=9), added MIX360 user manual and UT-MIX manual

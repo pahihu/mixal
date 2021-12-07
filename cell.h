@@ -38,7 +38,7 @@ typedef unsigned Byte;  /* 0..63 */
 /* Largest possible magnitude of a Cell */
 #define CELL_MAX    ((1L << 30) - 1)
 /* Largest possible magnitude of an index register (i.e., 2 bytes) */
-#define INDEX_MAX   ((1L << 12) - 1)
+extern Cell INDEX_MAX;
 
 #define zero ((Cell) 0)
 

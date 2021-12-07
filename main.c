@@ -174,7 +174,7 @@ int main(int argc, char **argv)
         for (i = 1; i < argc; ++i) {
             if (*argv[i] == '-')
                 switch (argv[i][1]) {
-		case 'a': asm_only = true; break;
+		        case 'a': asm_only = true; break;
                 case 'b': flags += MIXCONFIG_BINARY; break;
                 case 'c': flags += MIXCONFIG_CORE; break;
                 case 'd': dump = true; break;

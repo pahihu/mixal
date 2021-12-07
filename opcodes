@@ -78,7 +78,7 @@ inc-	48	0	x
 dec-	48	1	x
 ent-	48	2	x
 enn-	48	3	x
-cp-m	48	4       x
+cpm-	48	4       x
 cmp-	56
 fcmp    56      6       x
 orig	x
