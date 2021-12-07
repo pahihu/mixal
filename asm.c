@@ -4,7 +4,9 @@
 #include "asm.h"
 #include "run.h"    /* for memory_fetch(), memory_store() */
 
+#include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* --- The assembly buffer --- */
 
@@ -22,8 +24,8 @@ void asm_store_field(Address address, unsigned L, unsigned R, Cell cell)
 {
     // assert(address < memory_size);
     if (VERBOSE) {
-        char temp[12];
-        unparse_cell(temp, cell);
+        char temp[16];
+        unparse_cell(temp, cell, false);
         printf("%4o(%u,%u): %s\n", address, L, R, temp);
     }
     memory_store(address, set_field(cell, make_field_spec(L, R), memory_fetch(address)));
@@ -32,9 +34,9 @@ void asm_store_field(Address address, unsigned L, unsigned R, Cell cell)
 void assemble(Cell cell)
 {
     if (VERBOSE) {
-        char temp[12];
-	    unparse_cell(temp, cell);
-	    printf("%4o: %s\n", here, temp);
+        char temp[16];
+        unparse_cell(temp, cell, true);
+        printf("%4o: %s  %s\n", here, temp, current_line);
     }
     // if (here < memory_size)
     //	memory[here] = cell;

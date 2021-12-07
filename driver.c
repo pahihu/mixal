@@ -46,14 +46,20 @@ static void do_equ(void)
 {
     define_symbol(string_to_symbol(label), parse_W());
     if (VERBOSE) {
+        printf("         ");
         print_cell(symbol_value(string_to_symbol(label)));
-	printf("\n");
+        printf("  %s\n", current_line);
     }
 }
 
 static void do_orig(void)
 {
     here = cell_to_address(parse_W());
+    if (VERBOSE) {
+        printf("               ");
+        printf("%s%04o", here < 0 ? "-" : "+", abs(here));
+        printf("  %s\n", current_line);
+    }
 }
 
 /* --- The opcode/directive table --- */
@@ -173,7 +179,7 @@ static void eat_identifier(char *buffer, const_char_ptr *s)
 
     if (max_identifier_length < size) {
         warn ("Truncated long label or mnemonic: %*.*s", size, size, *s);
-	truncated_size = max_identifier_length;
+	    truncated_size = max_identifier_length;
     } else
         truncated_size = size;
 
@@ -182,13 +188,26 @@ static void eat_identifier(char *buffer, const_char_ptr *s)
     *s += size;
 }
 
+char current_line[257];
 void assemble_line(const char *line)
 {
     char mnemonic[max_identifier_length+1];
     const char *scan = line;
-    
-    if (*skip_blanks(scan) == '*')      /* the comment character */
-	return;
+    int n;
+
+    current_line[0] = '\0';             /* trim right */
+    if (line) {
+        strcpy(current_line, line);
+        n = strlen(current_line);
+        while (n && isspace(current_line[n-1])) n--;
+        current_line[n] = '\0';
+    }
+
+    if (*skip_blanks(scan) == '*') {    /* the comment character */
+        if (VERBOSE)
+            printf("                    %s\n", current_line);
+	    return;
+    }
 
     eat_identifier(label, &scan);       /* eat label if any */
     scan = skip_blanks(scan);

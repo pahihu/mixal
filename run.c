@@ -70,6 +70,12 @@ static Address pc;                  /* the program counter */
 static State internal_state;        /* MIX internal state  */
 static int rtc_busy;                /* real-time clock active */
 static Flag rtc_int_pending;        /* real-time clock interrupt pending */
+static Flag halting ;               /* HLT in progress */
+
+Flag get_halting(void)
+{
+    return halting;
+}
 
 void set_trace_count(unsigned value)
 {
@@ -96,6 +102,7 @@ void set_initial_state(void)
         r[i] = zero;
     }
     pc = entry_point;       /*** need to check for no entry point */
+    halting = false;
 }
 
 State get_internal_state(void)
@@ -400,16 +407,15 @@ static int overpunched(Cell cell)
     return (9 < mix_char) && (mix_char < 20);
 }
 
-static Cell flip_chars(Cell cell)
+static Cell flip_char(Cell cell)
 {
-    int i;
-    Cell ret = zero;
+    Cell ret = cell;
+    Byte mix_char;
 
-    for (i = 1; i <= 5; i++) {
-        Byte mix_char = get_byte(i, cell);
-        if ((29 < mix_char) && (mix_char < 40))
-            mix_char = mix_char - 20;
-        ret = set_byte(mix_char, i, ret);
+    mix_char = get_byte(5, ret);
+    if ((9 < mix_char) && (mix_char < 20)) {
+        mix_char = mix_char + 20;
+        ret = set_byte(mix_char, 5, ret);
     }
     return ret;
 }
@@ -419,17 +425,21 @@ static void do_special(void)
     switch (F) {
     case 0: { /* NUM */
         unsigned i;
+        Flag negative = false;
         Cell num = zero;
-        Cell ten = ulong_to_cell(10);
+        Cell ten = ulong_to_cell (10);
         if (overpunched(r[X])) {
-            r[X] = flip_chars(r[X]);
-            r[X] = flip_chars(r[A]);
+            r[X] = flip_char (r[X]);
+            negative = true;
         }
         for (i = 1; i <= 5; ++i)
             num = add(mul(ten, num), (Cell)(get_byte(i, r[A]) % 10));
         for (i = 1; i <= 5; ++i)
             num = add(mul(ten, num), (Cell)(get_byte(i, r[X]) % 10));
-        r[A] = is_negative(r[A]) ? negative(num) : num;
+        if (negative)
+            r[A] = negative(num);
+        else
+            r[A] = is_negative (r[A]) ? negative(num) : num;
         break;
     }
     case 1: { /* CHAR */
@@ -440,9 +450,12 @@ static void do_special(void)
             r[X] = set_byte((Byte) (z + num % 10), i, r[X]);
         for (i = 5; 0 < i; --i, num /= 10)
             r[A] = set_byte((Byte) (z + num % 10), i, r[A]);
+        if (is_negative (r[A]))
+            r[X] = flip_char (r[X]);
         break;
     }
     case 2: /* HLT */
+        halting = true;
         elapsed_time += io_complete();
         longjmp(escape_k, 1);
         break;
@@ -640,9 +653,9 @@ static void do_jred(void)
         jump();
 }
 
-static void do_ioc(void)    { elapsed_time += io_control(F, r[X], M); }
-static void do_in(void)     { elapsed_time += do_input(F, r[X], cell_to_address(M)); }
-static void do_out(void)    { elapsed_time += do_output(F, r[X], cell_to_address(M)); }
+static void do_ioc(void)    { elapsed_time += io_control(pc-1, F, r[X], M); }
+static void do_in(void)     { elapsed_time += do_input(pc-1, F, r[X], cell_to_address(M)); }
+static void do_out(void)    { elapsed_time += do_output(pc-1, F, r[X], cell_to_address(M)); }
 
 static void compare(Cell cell)
 {
@@ -764,20 +777,16 @@ static const struct {
 };
 
 
-static Flag F_used;
-static const char* mnemonic(Byte C, Byte F)
+const char* mnemonic(Byte C, Byte F)
 {
     static char buffer[5];
     const char *ret = op_table[C].mnemonic;
     
-    F_used = false;
     if (*ret == '*') {
-        F_used = true;
         strncpy(buffer, ret + 1 + F * 4, 4);
         buffer[4] = '\0';
         ret = buffer;
     } else if (*ret == '%') {
-        F_used = true;
         strncpy(buffer, ret + 1 + (7 & F) * 4, 4);
         buffer[4] = '\0';
         ret = buffer;

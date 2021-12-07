@@ -17,6 +17,8 @@
 #include <string.h>
 #include <time.h>
 
+Flag VERBOSE = false;
+
 static const char *current_file = NULL;
 static unsigned line_number;
 static unsigned num_errors = 0;
@@ -147,6 +149,7 @@ static void usage()
     fprintf(stderr, "         -r             redirect reader/punch/printer\n");
     fprintf(stderr, "         -t n           trace instructions n times\n");
     fprintf(stderr, "         -x             double/indirect-indexing attachment installed\n");
+    fprintf(stderr, "         -v             set verbose flag\n");
     exit(1);
 }
 
@@ -197,6 +200,7 @@ int main(int argc, char **argv)
                     set_trace_count(atol(argv[i]));
                     break;
                 case 'x': flags += MIXCONFIG_INDEX; break;
+                case 'v': VERBOSE = true; break;
                 default: usage();
                 }
         }

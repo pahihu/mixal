@@ -7,9 +7,13 @@ uses the MIX machine.
 
 For a reference see the [MIX Reference Card](https://github.com/pahihu/mixal/blob/master/mixref.pdf).
 
+If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](https://gitlab.com/x653/mix-fpga) !
+
 
 Changes:
 
+  * fixed shifts, NUM handles overpunch, debugged I/O, runs Peterson's
+    load-and-go assembler (see `runprimes')
   * fixed INT encoding (C=5,F=9), added MIX360 user manual and UT-MIX manual
   * ALF statement without quotes
   * assemble only
@@ -27,7 +31,7 @@ Changes:
   * count idle time waiting for I/O to complete
   * MinGW port
   * overlapping I/O buffer checks, incomplete I/O detection
-  * [reference card](https://github.com/pahihu/mixal/blob/master/mixref.pdf)
+  * reference card
   * card reader/punch and printer can use files instead of stdin/stdout
   * time dependent I/O (low-end Burroughs B5500 peripheral timing)
   * tape devices

@@ -10,7 +10,8 @@
 typedef enum { false, true } Flag;
 
 /* Dump helpful debugging info if true: */
-#define VERBOSE false
+extern Flag VERBOSE;
+extern char current_line[257];
 
 #define not_reached false
 #define NOT_REACHED     assert(not_reached)

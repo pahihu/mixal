@@ -7,9 +7,9 @@
 #include <string.h>
 
 static const char mix_chars[65] = 
-  //           1         2         3         4         5
-  // 01234567890123456789012345678901234567890123456789012345
-    " ABCDEFGHI~JKLMNOPQR[#STUVWXYZ0123456789.,()+-*/=$<>@;:'???????";
+  //           1         2         3         4         5         6
+  // 0123456789012345678901234567890123456789012345678901234567890123
+    " ABCDEFGHI~JKLMNOPQR[#STUVWXYZ0123456789.,()+-*/=$<>@;:'????????";
 
 #define num_chars (sizeof(mix_chars) - 1)
 

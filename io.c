@@ -24,6 +24,7 @@ int control_incomplete[memory_size];        /* mark cell used by I/O */
 
 enum DeviceType current_device_type;
 typedef enum {control, input, output} Operation;
+static char* operations[] = {"control", "read", "write"};
 
 #ifdef WIN32
 #define	TXT_APPEND   "at"
@@ -42,10 +43,11 @@ static struct {
     long position;        /* used by random-access devices */
   /*    const char *filename; */
     unsigned busy;              /* expiration time */
-    Operation operation;
-    Cell argument;
-    Cell offset;
-    Address buffer; 
+    Address pc;              /* I/O instruction address */
+    Operation operation;     /* control, input, output */
+    Cell rX;                 /* contents of r[X] */
+    Cell offset;             /* M */
+    Address buffer;          /* source/destination buffer address */
     Flag int_request;        /* request interrupt on completion */
     Flag int_pending;        /* interrupt pending */
 } devices[] = {
@@ -68,6 +70,8 @@ typedef void IOCHandler(unsigned, Cell, Cell);
 static IOHandler tape_in, disk_in, text_in, console_in, no_in;
 static IOHandler tape_out, disk_out, text_out, console_out, no_out;
 static IOCHandler tape_ioc, disk_ioc, no_ioc, printer_ioc;
+
+static void do_io(Byte device);
 
 /* The device-class table: */
 /*** need to distinguish read/write permission... */
@@ -190,34 +194,45 @@ static void io_mark_incomplete(Address buffer, unsigned block_size, int mark)
             error("Cannot access control store in normal state");
     }
 
-    if (dbg > 2)
-        fprintf(stderr, "io_mark_incomplete(%d,%d,%d)\n", buffer, block_size, mark);
+    if (dbg > 2) {
+        fflush(stdout);
+        fprintf(stderr, "io_mark_incomplete(%d,%d,%d)\n",
+                buffer, block_size, mark);
+    }
     for (i = 0; i < block_size; i++) {
         if (memory_size <= magnitude(buffer + i))
             error("Address out of range -- io_mark_incomplete");
         current_count = fetch_incomplete(buffer + i);
         if (current_count + mark < 0) {
-            if (dbg > 3)
+            if (dbg > 3) {
+                fflush(stdout);
                 fprintf(stderr, "current: %d, mark: %d\n", current_count, mark);
+            }
             error("Overlapping buffers -- io_mark_incomplete");
         }
         store_incomplete(buffer + i, current_count + mark);
     }
 }
 
-static void io_schedule(Byte device, Operation operation, 
-                        Cell argument, Cell offset, Address buffer)
+static void io_schedule(Address pc,
+                        Byte device, Operation operation,
+                        Cell rX, Cell offset, Address buffer)
 {
-    static char* operations[] = {"control", "read", "write"};
     unsigned busy, seek_time, u;
     enum DeviceType device_type;
     long position;
 
-    if (dbg > 2)
-        fprintf(stderr,"io_schedule(%d, %s, %ld, %ld, %d)\n", device, operations[operation], argument, offset, buffer);
+    if (dbg > 2) {
+        fflush(stdout);
+        fprintf(stderr,"io_schedule(%04o, %d, %s, %s%lo, %ld, %d)\n",
+                pc, device, operations[operation],
+                is_negative(rX) ? "-" : "", magnitude(rX),
+                offset, buffer);
+    }
 
+    devices[device].pc        = pc;
     devices[device].operation = operation;
-    devices[device].argument  = argument;
+    devices[device].rX        = rX;
     devices[device].offset    = offset;
     devices[device].buffer    = buffer;
 
@@ -250,9 +265,6 @@ static void io_schedule(Byte device, Operation operation,
             break;
         }
         busy *= seek_time;
-        /* NB. some code assumes devices are always busy after IOC */
-        if (0 == busy)
-            busy = 5;
     }
     else {
         if ((device_type != console) || (operation != input))
@@ -267,9 +279,15 @@ static void io_schedule(Byte device, Operation operation,
                            operation == input ? WRITE : READ);
     }
     if (dbg > 2) {
+        fflush(stdout);
         fprintf(stderr,"io_schedule: busy = %d next_scheduled_io = %u\n", busy, next_scheduled_io);
     }
     devices[device].busy = busy;
+
+    if (0 == busy) {
+        do_io (device);
+        return;
+    }
 
     if (next_scheduled_io) {
         if (busy < next_scheduled_io)
@@ -280,26 +298,33 @@ static void io_schedule(Byte device, Operation operation,
 
 static void do_io(Byte device)
 {
-    Cell argument, offset;
+    Cell rX, offset;
     Address buffer;
     Operation operation;
 
     operation = devices[device].operation;
-    argument  = devices[device].argument;
+    rX        = devices[device].rX;
     offset    = devices[device].offset;
     buffer    = devices[device].buffer;
 
-    if (dbg > 1)
-        fprintf(stderr,"do_io: device=%d operation=%d argument=%ld offset=%ld buffer=%d\n", device, operation, argument, offset, buffer);
+    if (dbg > 1) {
+        fflush(stdout);
+        fprintf(stderr,"do_io(%04o, %d, %s, %s%lo, %ld, %d, @%ld)\n",
+                devices[device].pc,
+                device, operations[operation],
+                is_negative(rX) ? "-" : "", magnitude(rX),
+                offset, buffer,
+                devices[device].position);
+    }
 
     current_device_type = devices[device].type;
     switch (operation) {
     case control:
-        attributes(device)->ioc_handler(device, argument, offset); break;
+        attributes(device)->ioc_handler(device, rX, offset); break;
     case input:
-        attributes(device)->in_handler(device, argument, buffer); break;
+        attributes(device)->in_handler(device, rX, buffer); break;
     case output:
-        attributes(device)->out_handler(device, argument, buffer);
+        attributes(device)->out_handler(device, rX, buffer);
         if (current_device_type == printer)
             devices[device].position++;
     }
@@ -315,8 +340,9 @@ static void do_io(Byte device)
     devices[device].busy = 0;
 }
 
-static unsigned do_operation(Byte device, Operation operation,
-                             Cell argument, Cell offset, Address buffer)
+static unsigned do_operation(Address pc,
+                             Byte device, Operation operation,
+                             Cell rX, Cell offset, Address buffer)
 {
     unsigned clocks = 0;
 
@@ -327,9 +353,6 @@ static unsigned do_operation(Byte device, Operation operation,
 
     ensure_open(device);
     if (devices[device].busy) {
-    /*
-        clocks = devices[device].busy;
-    */
         clocks = 1;
         idle_time += clocks;
         do_scheduled_io(clocks);
@@ -341,12 +364,12 @@ static unsigned do_operation(Byte device, Operation operation,
         devices[device].int_request = true;
 
     if (attributes(device)->io_time)
-        io_schedule(device, operation, argument, offset, buffer); 
+        io_schedule(pc, device, operation, rX, offset, buffer);
     else {
         switch (operation) {
-        case control: attributes(device)->ioc_handler(device, argument, offset); break;
-        case input:   attributes(device)->in_handler(device, argument, buffer); break;
-        case output:  attributes(device)->out_handler(device, argument, buffer); break;
+        case control: attributes(device)->ioc_handler(device, rX, offset); break;
+        case input:   attributes(device)->in_handler(device, rX, buffer); break;
+        case output:  attributes(device)->out_handler(device, rX, buffer); break;
         }
         if (devices[device].int_request == true)
             devices[device].int_pending = true;
@@ -354,34 +377,34 @@ static unsigned do_operation(Byte device, Operation operation,
     return clocks;
 }
 
-unsigned io_control(Byte device, Cell argument, Cell offset)
+unsigned io_control(Address pc, Byte device, Cell rX, Cell offset)
 {
-    return do_operation(device, control, argument, offset, 0);
+    return do_operation(pc, device, control, rX, offset, 0);
 }
 
-unsigned do_input(Byte device, Cell argument, Address buffer)
+unsigned do_input(Address pc, Byte device, Cell rX, Address buffer)
 {
-    return do_operation(device, input, argument, 0, buffer);
+    return do_operation(pc, device, input, rX, 0, buffer);
 }
 
-unsigned  do_output(Byte device, Cell argument, Address buffer)
+unsigned  do_output(Address pc, Byte device, Cell rX, Address buffer)
 {
-    return do_operation(device, output, argument, 0, buffer);
+    return do_operation(pc, device, output, rX, 0, buffer);
 }
 
 /* --- Unsupported input or output --- */
 
-static void no_ioc(unsigned device, Cell argument, Cell offset)
+static void no_ioc(unsigned device, Cell rX, Cell offset)
 {
     error("IOC undefined for device %02o", device);
 }
 
-static void no_in(unsigned device, Cell argument, Address buffer)
+static void no_in(unsigned device, Cell rX, Address buffer)
 {
     error("Input not allowed for device %02o", device);
 }
 
-static void no_out(unsigned device, Cell argument, Address buffer)
+static void no_out(unsigned device, Cell rX, Address buffer)
 {
     error("Output not allowed for device %02o", device);
 }
@@ -418,7 +441,7 @@ static void read_line(FILE* file, Address buffer, unsigned size)
         }
         if (dbg) {
             printf("read_line: %3d = ", buffer + i);
-            write_cell(cell, stdout, true);
+            write_cell (cell, stdout, true);
             printf("\n");
         }
         memory_store(buffer + i, cell);
@@ -453,19 +476,19 @@ static void write_line(FILE *file, Address buffer, unsigned size, Flag text)
     fputc('\n', file);
 }
 
-static void printer_ioc(Byte device, Cell argument, Cell offset)
+static void printer_ioc(Byte device, Cell rX, Cell offset)
 {
     if (magnitude(offset) != 0)
         error("IOC argument undefined for printer device %02o", device);
     fputc('\f', assigned_file(device));
 }
 
-static void text_in(Byte device, Cell argument, Address buffer)
+static void text_in(Byte device, Cell rX, Address buffer)
 {
     read_line(assigned_file(device), buffer, block_size(device));
 }
 
-static void text_out(Byte device, Cell argument, Address buffer)
+static void text_out(Byte device, Cell rX, Address buffer)
 {
     write_line(assigned_file(device), buffer, block_size(device), true);
 }
@@ -510,15 +533,29 @@ static void read_block(Byte device, Address buffer)
     for (i = 0; i < size; ++i) {
         Cell cell = zero;
         c = fgetc(file);
-        if (c == EOF)
-            error("Unexpected EOF reading from device %02o", device);
+        if (c == EOF) {
+            if (true /*get_halting()*/) {
+                fflush(stdout);
+                fprintf(stderr, "Unexpected EOF reading from device %02o\n", device);
+                return;
+            }
+            else
+                error("Unexpected EOF reading from device %02o", device);
+        }
         else if (c == '-')
             cell = negative(cell);
     
         for (b = 1; b <= 5; ++b) {
             c = fgetc(file);
-            if (c == EOF)
-                error("Unexpected EOF reading from device %02o", device);
+            if (c == EOF) {
+                if (true /*get_halting()*/) {
+                    fflush(stdout);
+                    fprintf(stderr, "Unexpected EOF reading from device %02o\n", device);
+                    return;
+                }
+                else
+                    error("Unexpected EOF reading from device %02o", device);
+            }
             cell = set_byte(C_int_to_mix(c), b, cell);
         }
         memory_store(buffer + i, cell);
@@ -535,7 +572,7 @@ static void write_block(Byte device, Address buffer)
 
 /* --- Tapes --- */
 
-static void tape_ioc(unsigned device, Cell argument, Cell offset)
+static void tape_ioc(unsigned device, Cell rX, Cell offset)
 {
     unsigned block_num, position;
     FILE *fd;
@@ -566,13 +603,13 @@ static void tape_ioc(unsigned device, Cell argument, Cell offset)
     devices[device].position = get_file_position(device);
 }
 
-static void tape_in(unsigned device, Cell argument, Address buffer)
+static void tape_in(unsigned device, Cell rX, Address buffer)
 {
     read_block(device, buffer);
     devices[device].position = get_file_position(device);
 }
 
-static void tape_out(unsigned device, Cell argument, Address buffer)
+static void tape_out(unsigned device, Cell rX, Address buffer)
 {
     write_block(device, buffer);
     devices[device].position = get_file_position(device);
@@ -580,7 +617,7 @@ static void tape_out(unsigned device, Cell argument, Address buffer)
 
 /* --- Disks --- */
 
-static void disk_ioc(Byte device, Cell argument, Cell offset)
+static void disk_ioc(Byte device, Cell rX, Cell offset)
 {
     unsigned block_num;
 
@@ -588,30 +625,30 @@ static void disk_ioc(Byte device, Cell argument, Cell offset)
         error("IOC argument undefined for disk device %02o", device);
 
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+        block_num = (unsigned) field(make_field_spec(5, 5), rX);
     else
-        block_num = (unsigned) field(make_field_spec(4, 5), argument);
+        block_num = (unsigned) field(make_field_spec(4, 5), rX);
     set_file_position(device, block_num, false);
 }
 
-static void disk_in(Byte device, Cell argument, Address buffer)
+static void disk_in(Byte device, Cell rX, Address buffer)
 {
     unsigned block_num;
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+        block_num = (unsigned) field(make_field_spec(5, 5), rX);
     else
-        block_num = (unsigned) field(make_field_spec(4, 5), argument);
+        block_num = (unsigned) field(make_field_spec(4, 5), rX);
     set_file_position(device, block_num, false);
     read_block(device, buffer);
 }
 
-static void disk_out(Byte device, Cell argument, Address buffer)
+static void disk_out(Byte device, Cell rX, Address buffer)
 {
     unsigned block_num;
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), argument);
+        block_num = (unsigned) field(make_field_spec(5, 5), rX);
     else
-        block_num = (unsigned) field(make_field_spec(4, 5), argument);
+        block_num = (unsigned) field(make_field_spec(4, 5), rX);
     set_file_position(device, block_num, true);
     write_block(device, buffer);
 }
@@ -619,12 +656,12 @@ static void disk_out(Byte device, Cell argument, Address buffer)
 /* --- The console (typewriter/paper tape) --- */
 /* Always connected to stdin/stdout, for simplicity. */
 
-static void console_in(Byte device, Cell argument, Address buffer)
+static void console_in(Byte device, Cell rX, Address buffer)
 {
     read_line(stdin, buffer, block_size(device));
 }
 
-static void console_out(Byte device, Cell argument, Address buffer)
+static void console_out(Byte device, Cell rX, Address buffer)
 {
     write_line(stdout, buffer, block_size(device), true);
 }
@@ -658,8 +695,10 @@ void do_scheduled_io(unsigned clocks)
     int i;
     Byte device;
 
-    if (dbg > 3)
+    if (dbg > 3) {
+        fflush(stdout);
         fprintf(stderr,"do_scheduled_io(%d)\n", clocks);
+    }
     for (i = 0; i < clocks; i++) {
         next_scheduled_io = (unsigned) -1;
         for (device = 0; device < num_devices; device++) {
@@ -754,7 +793,7 @@ Flag io_pending_interrupt(Byte *int_device)
     enum DeviceType next_device_type;
 
     next_device_type = (enum DeviceType) (LAST_DEVICE_TYPE + 1);
-    next_device      = DEV_XXX;
+    next_device      = DEV_UNK;
     for (device = 0; device < num_devices; device++) {
         if (devices[device].busy || false == devices[device].int_pending)
             continue;
@@ -764,7 +803,7 @@ Flag io_pending_interrupt(Byte *int_device)
             next_device = device;
         }
     }
-    if (DEV_XXX != next_device) {
+    if (DEV_UNK != next_device) {
         devices[next_device].int_request = false;
         devices[next_device].int_pending = false;
         *int_device = next_device;
@@ -775,38 +814,25 @@ Flag io_pending_interrupt(Byte *int_device)
 
 /* --- Punch object card deck --- */
 
-static void punch_card(FILE *fdev, const char *title, Address address)
+static void punch_card(FILE *fdev, const char *title, Address address, int num_words)
 {
     static char overpunch[] = "~JKLMNOPQR";
-    int i, numwords;
+    int i;
     char buf[16];
     Cell cell;
 
-    numwords = 0;
-    for (i = 0; i < 7; i++) {
+    fprintf(fdev, "%-5s%1d%04d", title, num_words, address);
+    for (i = 0; i < num_words; i++) {
         if (memory_size <= address + i)
             break;
-        cell = memory_fetch(address + i);
-        if (magnitude(cell)) {
-            numwords = i + 1;
-        }
-    }
-
-    if (0 == numwords)
-        return;
-
-    fprintf(fdev, "%-5s%1d%04d", title, numwords, address);
-    for (i = 0; i < numwords; i++) {
-        if (memory_size <= address + i)
-            break;
-        cell = memory_fetch(address + i);
-        sprintf(buf, "%010ld", magnitude(cell));
-        if (is_negative(cell))
+        cell = memory_fetch (address + i);
+        sprintf(buf, "%010ld", magnitude (cell));
+        if (is_negative (cell))
             buf[9] = overpunch[buf[9]-'0'];
         fprintf(fdev, "%s", buf);
     }
 
-    for (i = numwords; i < 7; i++)
+    for (i = num_words; i < 7; i++)
         fprintf(fdev, "          ");
 
     fprintf(fdev, "\n");
@@ -818,22 +844,30 @@ void punch_object_deck(const char *title, Address start_address)
     Address address;
     Cell cell;
     unsigned num_cards;
+    int i, num_words;
 
-    card_punch = fopen(methods[card_out].base_filename, methods[card_out].fam);
+    card_punch = fopen (methods[card_out].base_filename, methods[card_out].fam);
     if (NULL == card_punch)
-        error("Cannot open card puncher");
+        error ("Cannot open card puncher");
     num_cards = 0;
     for (address = 100; address < memory_size; address++) {
-        cell = memory_fetch(address);
-        if (magnitude(cell)) {
-            punch_card(card_punch, title, address);
+        num_words = 0;
+        for (i = 0; i < 7; i++) {
+            if (memory_size <= address + i)
+                break;
+            cell = memory_fetch (address);
+            if (magnitude (cell))
+               num_words = i + 1;
+        }
+        if (num_words) {
+            punch_card (card_punch, title, address, num_words);
             num_cards++;
             address += 6;
         }
     }
     if (num_cards) {
-        fprintf(card_punch, "TRANS0%04d\n", abs(start_address));
-        fflush(card_punch);
+        fprintf (card_punch, "TRANS0%04d\n", abs(start_address));
+        fflush (card_punch);
     }
-    fclose(card_punch);
+    fclose (card_punch);
 }

@@ -14,6 +14,7 @@ void memory_store(Address address, Cell cell);      /* store cell at address, ra
 typedef enum{normal_state, control_state} State;
 State get_internal_state(void);                     /* internal machine state */
 void set_wait_state(void);                          /* set wait state */
+Flag get_halting(void);                             /* HLT in progress */
 
 #define MIXCONFIG_BINARY    (  1U)                  /* binary MIX */
 #define MIXCONFIG_INTERRUPT (  2U)                  /* interrupt facility */

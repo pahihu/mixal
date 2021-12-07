@@ -26,16 +26,17 @@
 #define DEV_CP0   ((Byte) 021)
 #define DEV_LP0   ((Byte) 022)
 #define DEV_TT0   ((Byte) 023)
-#define DEV_XXX	  ((Byte) 255)
+#define DEV_UNK	((Byte) 255)
 
 extern unsigned long idle_time;             /* in Tyme units, waiting for I/O */
 
 void io_init(void);
 void io_shutdown(void);
 
-unsigned io_control(Byte device, Cell argument, Cell offset);   /* returns idle clocks */
-unsigned do_input(Byte device, Cell argument, Address buffer);
-unsigned do_output(Byte device, Cell argument, Address buffer);
+unsigned io_control(Address pc, Byte device, Cell argument, Cell offset);
+                                            /* returns idle clocks */
+unsigned do_input(Address pc, Byte device, Cell argument, Address buffer);
+unsigned do_output(Address pc, Byte device, Cell argument, Address buffer);
 void io_redirect(void);                     /* redirect reader/punch/printer to files */
 void io_set_go_device(Byte device);         /* set GO device */
 Byte io_go_device(void);                    /* return GO device number */

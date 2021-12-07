@@ -104,7 +104,8 @@ int  float_compare(Cell x, Cell y);
 
 /* --- Printable representation --- */
 void print_cell(Cell cell);
-void unparse_cell(char *buffer, Cell cell); /* Pre: 12 <= sizeof(buffer) */
+void unparse_cell(char *buffer, Cell cell, Flag disasm);
+                                       /* Pre: 16 <= sizeof(buffer) */
 
 /* --- Addresses --- */
 typedef int Address;

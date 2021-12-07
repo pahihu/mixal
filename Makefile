@@ -3,7 +3,8 @@
 # Must be changed in the spec file as well.
 VERS=$(shell sed <mixal.spec -n -e '/Version: \(.*\)/s//\1/p')
 
-CFLAGS = -O2 -Wall
+CC = cc
+CFLAGS = -Wall -O2
 
 CSRCS = asm.c cell.c charset.c driver.c io.c main.c parse.c run.c symbol.c
 HSRCS = asm.h cell.h charset.h driver.h io.h mix.h parse.h run.h symbol.h

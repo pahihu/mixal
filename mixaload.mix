@@ -7,6 +7,7 @@ LP         EQU  18
 MAXSYMBOL  EQU  250                                                             
 *                                                                               
 * CHARACTER CONSTANT                                                            
+*
 CHARA      ALF  AAAAA                                                           
 CHARO      ALF  00000                                                           
 CHAR9      ALF  99999                                                           
@@ -22,9 +23,12 @@ CHAINEND   CON  4095
 *                                                                               
 *          TAPE BUFFER VARIABLES                                                
 *                                                                               
+           ORIG 3680
 FIRST      CON  *                                                               
 BUF1       ORIG *+100                                                           
 BUF2       ORIG *+100                                                           
+*
+           ORIG 1011
 STOREBUF   CON  BUF1                                                            
 TAPEBUF    CON  BUF2                                                            
 TAPEBUFPTR CON  BUF1                                                            
@@ -799,15 +803,16 @@ HL2BYTE    CON  -4095
 HLWORD     CON  -1073741823                                                     
            CON  +1073741823                                                     
 *                                                                               
-*                                                                               
-OPERATOR   ORIG *+44                                                            
+* USE '.' INSTEAD OF ':'
+*
+OPERATOR   ORIG *+40
+           CON  5
+           ORIG *+3
            CON  1                                                               
            CON  2                                                               
            CON  3                                                               
            CON  4                                                               
-           ORIG *+6                                                             
-           CON  5                                                               
-           ORIG *+10                                                            
+           ORIG *+16
 *                                                                               
 *                                                                               
 *          SUBROUTINE EVALSYM                                                   
@@ -1532,11 +1537,12 @@ FINEXIT    JMP  *
 *          LOADER ROUTINE                                                       
 *                                                                               
 *                                                                               
-           ORIG 3680                                                            
+*          ORIG 3680
 * FIRST    CON  *
 * BUF1     ORIG *+100
 * BUF2     ORIG *+100
 *                                                                               
+           ORIG 3881
 CHKSUM     ORIG *+1                                                             
 HEADER     ORIG *+1                                                             
 *                                                                               
@@ -1571,7 +1577,7 @@ NEXTBLOCK  JMP  INPUT
            STA  HEADER                                                          
            INC3 1                                                               
 *                                                                               
-           LD1  HEADER(0:2)                                                     
+           LD1  HEADER(0:2)
            LD2  HEADER(4:5)                                                     
            LD4  HEADER(3:3)                                                     
            DEC4 2                                                               
