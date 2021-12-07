@@ -51,7 +51,5 @@ Address entry_point;
 void set_entry_point(Address address)
 {
     assert(abs(address) < memory_size);
-    if (VERBOSE)
-        printf("entry point: %4o\n", address);
     entry_point = address;
 }

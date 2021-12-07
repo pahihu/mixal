@@ -149,7 +149,7 @@ static void usage()
     fprintf(stderr, "         -r             redirect reader/punch/printer\n");
     fprintf(stderr, "         -t n           trace instructions n times\n");
     fprintf(stderr, "         -x             double/indirect-indexing attachment installed\n");
-    fprintf(stderr, "         -v             set verbose flag\n");
+    fprintf(stderr, "         -v             verbose assembler output\n");
     exit(1);
 }
 

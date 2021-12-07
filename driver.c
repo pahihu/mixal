@@ -39,16 +39,25 @@ static void do_alf(void)
 
 static void do_end(void)
 {
-    set_entry_point(cell_to_address(parse_W()));
+    Address address;
+
+    address = cell_to_address(parse_W());
+    set_entry_point(address);
+    if (VERBOSE) {
+        printf("               ");
+        printf("%s%04o", address < 0 ? "-" : "+", abs(address));
+        printf("  %s\n", current_line);
+    }
 }
 
 static void do_equ(void)
 {
     define_symbol(string_to_symbol(label), parse_W());
     if (VERBOSE) {
-        printf("         ");
-        print_cell(symbol_value(string_to_symbol(label)));
-        printf("  %s\n", current_line);
+        Cell cell = symbol_value(string_to_symbol(label));
+        printf("         %s%010lo  %s\n",
+               is_negative(cell) ? "-" : "+", magnitude(cell),
+               current_line);
     }
 }
 
@@ -205,7 +214,7 @@ void assemble_line(const char *line)
 
     if (*skip_blanks(scan) == '*') {    /* the comment character */
         if (VERBOSE)
-            printf("                    %s\n", current_line);
+            printf("                      %s\n", current_line);
 	    return;
     }
 

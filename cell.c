@@ -321,7 +321,7 @@ void unparse_cell(char *buffer, Cell cell, Flag disasm)
                 I, F, C);
     } else
         sprintf(buffer, "%s%010lo",
-                sign_bit (cell) == 0 ? " " : "-", magnitude (cell));
+                is_negative (cell) ? "-" : "+", magnitude (cell));
 }
 
 /* --- Addresses --- */
