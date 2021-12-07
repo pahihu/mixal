@@ -12,8 +12,8 @@ If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](ht
 
 Changes:
 
-  * fixed shifts, NUM handles overpunch, debugged I/O, runs Peterson's
-    load-and-go assembler (see `runprimes`)
+  * fixed shifts, punch object card deck, NUM handles overpunch,
+    debugged I/O, runs Peterson's load-and-go assembler (see `runprimes`)
   * fixed INT encoding (C=5,F=9), added MIX360 user manual and UT-MIX manual
   * ALF statement without quotes
   * assemble only
