@@ -22,7 +22,7 @@ void error(const char *message, ...);
 void fatal_error(const char *message, ...);
 
 #define max_identifier_length 32
-#define memory_size 4000
+extern int memory_size;
 
 /* Device types: */
 enum DeviceType { drum, disk, tape, card_in, card_out, printer, console };

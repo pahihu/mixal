@@ -26,7 +26,7 @@ void asm_store_field(Address address, unsigned L, unsigned R, Cell cell)
     if (VERBOSE) {
         char temp[16];
         unparse_cell(temp, cell, false);
-        printf("%4o(%u,%u): %s\n", address, L, R, temp);
+        printf("%s(%u,%u): %s\n", address_to_string(address), L, R, temp);
     }
     memory_store(address, set_field(cell, make_field_spec(L, R), memory_fetch(address)));
 }
@@ -36,7 +36,7 @@ void assemble(Cell cell)
     if (VERBOSE) {
         char temp[16];
         unparse_cell(temp, cell, true);
-        printf("%4o: %s  %s\n", here, temp, current_line);
+        printf("%s: %s  %s\n", address_to_string(here), temp, current_line);
     }
     // if (here < memory_size)
     //	memory[here] = cell;
@@ -53,3 +53,5 @@ void set_entry_point(Address address)
     assert(abs(address) < memory_size);
     entry_point = address;
 }
+
+/* vim: set ts=4 sw=4 et: */

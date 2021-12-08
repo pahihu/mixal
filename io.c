@@ -15,8 +15,8 @@ static int redirect_devices = 0;            /* stdin/stdout is card reader/print
 static Byte go_device = DEV_CR0;            /* default GO device is the card reader */
 static unsigned next_scheduled_io = 0;      /* next I/O time */
 unsigned long idle_time = 0;                /* waiting for I/O */
-int incomplete[memory_size];                /* mark cell used by I/O */
-int control_incomplete[memory_size];        /* mark cell used by I/O */
+int *incomplete;                            /* mark cell used by I/O */
+int *control_incomplete;                    /* mark cell used by I/O */
 #define READ    (-1)
 #define WRITE   (-((int) num_devices + 1))
 
@@ -224,8 +224,9 @@ static void io_schedule(Address pc,
 
     if (dbg > 2) {
         fflush(stdout);
-        fprintf(stderr,"io_schedule(%04o, %d, %s, %s%lo, %ld, %d)\n",
-                pc, device, operations[operation],
+        fprintf(stderr,"io_schedule(%s, %d, %s, %s%lo, %ld, %d)\n",
+                address_to_string(pc),
+                device, operations[operation],
                 is_negative(rX) ? "-" : "", magnitude(rX),
                 offset, buffer);
     }
@@ -309,8 +310,8 @@ static void do_io(Byte device)
 
     if (dbg > 1) {
         fflush(stdout);
-        fprintf(stderr,"do_io(%04o, %d, %s, %s%lo, %ld, %d, @%ld)\n",
-                devices[device].pc,
+        fprintf(stderr,"do_io(%s, %d, %s, %s%lo, %ld, %d, @%ld)\n",
+                address_to_string(devices[device].pc),
                 device, operations[operation],
                 is_negative(rX) ? "-" : "", magnitude(rX),
                 offset, buffer,
@@ -730,6 +731,15 @@ Flag io_scheduled(void)
 void io_init(void)
 {
     Byte i;
+
+    incomplete = malloc(sizeof(int) * memory_size);
+    if (!incomplete)
+        fatal_error("Out of heap space!");
+
+    control_incomplete = malloc(sizeof(int) * memory_size);
+    if (!control_incomplete)
+        fatal_error("Out of heap space!");
+
     for (i = 0; i < num_devices; i++) {
         devices[i].busy = 0;
         devices[i].int_request = false;
@@ -871,3 +881,5 @@ void punch_object_deck(const char *title, Address start_address)
     }
     fclose (card_punch);
 }
+
+/* vim: set ts=4 sw=4 et: */

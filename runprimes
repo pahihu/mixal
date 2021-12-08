@@ -1,5 +1,5 @@
 rm -f punch printer
 ./mixal -a -o mixaload.mix
 cat cardload.dek punch primes.mix >reader
-./mixal -r -g
+./mixal -r -g -d
 cat printer

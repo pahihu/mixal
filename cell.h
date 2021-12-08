@@ -103,6 +103,7 @@ int  float_compare(Cell x, Cell y);
     } while (0)
 
 /* --- Printable representation --- */
+const char *index_to_string(Cell index);
 void print_cell(Cell cell);
 void unparse_cell(char *buffer, Cell cell, Flag disasm);
                                        /* Pre: 16 <= sizeof(buffer) */
@@ -110,6 +111,7 @@ void unparse_cell(char *buffer, Cell cell, Flag disasm);
 /* --- Addresses --- */
 typedef int Address;
 
+const char *address_to_string(Address address);
 Cell address_to_cell(Address addr);
 Address cell_to_address(Cell cell);
 

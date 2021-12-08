@@ -44,9 +44,8 @@ static void do_end(void)
     address = cell_to_address(parse_W());
     set_entry_point(address);
     if (VERBOSE) {
-        printf("               ");
-        printf("%s%04o", address < 0 ? "-" : "+", abs(address));
-        printf("  %s\n", current_line);
+        printf("                %s  %s\n",
+                address_to_string(address), current_line);
     }
 }
 
@@ -55,7 +54,7 @@ static void do_equ(void)
     define_symbol(string_to_symbol(label), parse_W());
     if (VERBOSE) {
         Cell cell = symbol_value(string_to_symbol(label));
-        printf("         %s%010lo  %s\n",
+        printf("          %s%010lo  %s\n",
                is_negative(cell) ? "-" : "+", magnitude(cell),
                current_line);
     }
@@ -65,9 +64,8 @@ static void do_orig(void)
 {
     here = cell_to_address(parse_W());
     if (VERBOSE) {
-        printf("               ");
-        printf("%s%04o", here < 0 ? "-" : "+", abs(here));
-        printf("  %s\n", current_line);
+        printf("                %s  %s\n",
+                address_to_string(here), current_line);
     }
 }
 
@@ -214,7 +212,7 @@ void assemble_line(const char *line)
 
     if (*skip_blanks(scan) == '*') {    /* the comment character */
         if (VERBOSE)
-            printf("                      %s\n", current_line);
+            printf("                       %s\n", current_line);
 	    return;
     }
 
@@ -242,3 +240,5 @@ void assemble_line(const char *line)
 	    ;
     }
 }
+
+/* vim: set ts=4 sw=4 et: */

@@ -53,10 +53,11 @@ static unsigned long elapsed_time = 0;      /* in Tyme units */
 
 /* --- The CPU state --- */
 
-Cell memory[memory_size];
-Cell control_memory[memory_size];            /* control store    */
-unsigned frequency[memory_size];            /* frequency counts */
-unsigned control_frequency[memory_size];    /* control store frequency counts */
+int  memory_size;
+Cell *memory;
+Cell *control_memory;                       /* control store    */
+unsigned *frequency;                        /* frequency counts */
+unsigned *control_frequency;                /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
 unsigned mix_config = 0;                    /* MIX configuration */
 Cell INDEX_MAX;
@@ -114,6 +115,23 @@ State get_internal_state(void)
 
 static void init_configuration(void)
 {
+    /* --- Allocate memory --- */
+    memory = malloc(sizeof(Cell) * memory_size);
+    if (!memory)
+        fatal_error("Out of heap space!");
+
+    control_memory = malloc(sizeof(Cell) * memory_size);
+    if (!control_memory)
+        fatal_error("Out of heap space!");
+
+    frequency = malloc(sizeof(unsigned) * memory_size);
+    if (!frequency)
+        fatal_error("Out of heap space!");
+
+    control_frequency = malloc(sizeof(unsigned) * memory_size);
+    if (!control_frequency)
+        fatal_error("Out of heap space!");
+
     /* --- Load core memory --- */
     if (mix_config & MIXCONFIG_CORE) {
         if (mix_config & MIXCONFIG_INTERRUPT)
@@ -124,10 +142,13 @@ static void init_configuration(void)
 
 void set_configuration(unsigned flags)
 {
+    memory_size = 4000;
     INDEX_MAX = ((1L << 12) - 1);
+
     if (MIXCONFIG_MASTER & flags) {
         flags = (unsigned) -1;
         INDEX_MAX = CELL_MAX;
+        memory_size = 250000;
     }
     mix_config |= flags;
 
@@ -219,7 +240,7 @@ static void restore_state(void)
 
 static void print_pc(void)
 {
-    printf("%c%04o", pc < 0 ? '-' : ' ', abs(pc));
+    printf ("%s", address_to_string(pc));
 }
 
 void print_CPU_state(void)
@@ -230,12 +251,11 @@ void print_CPU_state(void)
     {                        /* Print the index registers: */
         unsigned i;
         for (i = 1; i <= 6; ++i)
-        printf ("I%u:%s%04lo  ",
-            i, is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+        printf ("I%u:%s  ", i, index_to_string (r[i]));
     }
     printf ("\nX:");
     print_cell (r[X]);
-    printf ("\t J: %04lo", magnitude (r[J]));    /* (it's always nonnegative) */
+    printf ("\t J:%s", index_to_string (r[J])); /* (it's always nonnegative) */
     printf ("  PC:"); print_pc();
     printf ("  Flags: %-7s %-8s %-7s",
         comparison_indicator < 0 ? "less" :
@@ -325,7 +345,7 @@ void print_DUMP(void)
     
     printf ("\n");
     printf ("CONTENTS OF MIX MEMORY (NONZERO LOCATIONS ONLY)\n\n");
-    printf ("LOC        0           1           2           3              FREQUENCY COUNTS\n");
+    printf ("LOC        0           1           2           3                  FREQUENCY COUNTS\n");
     for (i = 0; i < memory_size / 4; i++, address += 4) {
         Flag has_nonzero = false;
         for (j = 0; !has_nonzero && j < 4; j++) {
@@ -335,7 +355,7 @@ void print_DUMP(void)
         }
         if (!has_nonzero)
             continue;
-        printf ("%04o:", address);
+        printf ("%s:", address_to_string(address));
         for (j = 0; j < 4; j++) {
             Cell value = memory_fetch(address + j);
             if (magnitude(value)) {
@@ -347,7 +367,7 @@ void print_DUMP(void)
         }
         printf("     ");
         for (j = 0; j < 4; j++)
-            printf(" %05d", frequency[address + j]);
+            printf(" %07d", frequency[address + j]);
         printf("\n");
     }
 }
@@ -828,9 +848,9 @@ void print_CPU_trace(Flag header)
     {
         unsigned i;
         for (i = 1; i <= 6; ++i)
-        printf (" %s%04lo", is_negative (r[i]) ? "-" : " ", magnitude (r[i]));
+        printf (" %s", index_to_string (r[i]));
     }
-    printf (" +%04lo", magnitude (r[J]));
+    printf (" %s", index_to_string (r[J]));
     printf (" %c%c%c ", " X"[overflow ? 1: 0],
                "LEG"[1 + SIGN(comparison_indicator)],
                         " C"[control_state == internal_state ? 1 : 0]);
@@ -947,8 +967,9 @@ void run(void)
     if (trace_count)
         print_CPU_trace(true);
     for (;;) {
-        if (memory_size <= abs(pc))
-            error("Program counter out of range: %c%04o", pc < 0 ? '-' : ' ', abs(pc));
+        if (memory_size <= abs(pc)) {
+            error("Program counter out of range: %s", address_to_string(pc));
+        }
         {
             unsigned long start_time, delta_time;
 
@@ -1003,3 +1024,4 @@ void run(void)
     } /* for (;;) */
 }
 
+/* vim: set ts=4 sw=4 et: */

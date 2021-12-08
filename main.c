@@ -163,9 +163,10 @@ int main(int argc, char **argv)
     /* Assemble the input: */
     strcpy(title, "OBJS");
     install_error_handler(assembler_error);
-    if (argc == 1)
+    if (argc == 1) {
+        set_configuration(0);                           /* default config */
         assemble_file("-");
-    else {
+    } else {
         int i, j;
         unsigned flags;
 
@@ -227,7 +228,6 @@ int main(int argc, char **argv)
                 assemble_file(argv[i]);
             }
         }
-
     }
     resolve_generated_futures();
     if (num_errors != 0) {

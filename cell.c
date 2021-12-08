@@ -306,7 +306,31 @@ void shift_left_circular(Cell A, Cell X, unsigned count, Cell *pA, Cell *pX)
 
 void print_cell(Cell cell)
 {
-    printf("%s%010lo", sign_bit(cell) == 0 ? " " : "-", magnitude(cell));
+    printf("%c%010lo", sign_bit(cell) ? '-' : '+', magnitude(cell));
+}
+
+const char *address_to_string(Address address)
+{
+    static char buf[16];
+
+    if (memory_size > 4000)
+        sprintf(buf, "%c%010o", address < 0 ? '-' : '+', abs(address));
+    else
+        sprintf(buf, "%c%04o", address < 0 ? '-' : '+', abs(address));
+
+    return buf;
+}
+
+const char *index_to_string(Cell index)
+{
+    static char buf[16];
+
+    if (memory_size > 4000)
+        sprintf(buf, "%c%010lo", is_negative (index) ? '-' : '+', magnitude (index));
+    else
+        sprintf(buf, "%c%04lo", is_negative (index)  ? '-' : '+', magnitude (index));
+
+    return buf;
 }
 
 void unparse_cell(char *buffer, Cell cell, Flag disasm)
@@ -385,4 +409,4 @@ int float_compare(Cell x, Cell y)
     return 0;
 }
 
-
+/* vim: set ts=4 sw=4 et: */

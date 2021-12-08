@@ -12,6 +12,7 @@ If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](ht
 
 Changes:
 
+  * Mixmaster memory size is 250K words
   * changed CPrM syntax to CPMr (CI = reg:M), r1-r6 is 5bytes + sign
     in Mixmaster mode
   * fixed shifts, punch object card deck, NUM handles overpunch,
