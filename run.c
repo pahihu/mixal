@@ -870,13 +870,56 @@ static Cell effective_address(Address location)
     IGNORE_VALUE(FF);
 
     H = zero; L = location; N = 0;
+
+    /* Mixmaster effective address calculation over 4KW
+       +-----+------------------+-----------------+
+       | 0:0 | no modification  | MM              |
+       | 0:B | indexed          | MM+B            |
+       | A:0 | indexed          | MM+A            |
+       | A:B | double-indexed   | MM+A+B          |
+       | A:7 | indexed-indirect | CONTENTS(MM+A)  |
+       | 7:B | indirect-indexed | CONTENTS(MM)+B  |
+       | 7:7 | relative         | PC+MM           |
+       +-----+------------------+-----------------+ */
+    if (memory_size > 4000) {
+        destructure_cell(safe_fetch(L), MM, II, FF, CC);
+        E = MM;
+        I2 = II &  7;
+        I1 = II >> 3;
+
+        if (I1 == 7 && I2 == 7) {   /* relative addressing */
+            E = add(address_to_cell(pc), E);
+            return E;
+        }
+
+        if (0 < I1 && I1 < 7) {     /* indexed */
+            E = add(E, r[I1]);
+        } else if (I1 == 7) {       /* indirect */
+            L = cell_to_address(E);
+            E = safe_fetch(L);
+        }
+
+        if (0 < I2 && I2 < 7) {     /* double/indirect indexed */
+            E = add(E, r[I2]);
+        } else if (I2 == 7) {       /* indexed indirect */
+            L = cell_to_address(E);
+            E = safe_fetch(L);
+        }
+
+        return E;
+    }
+
 A2:
     destructure_cell(safe_fetch(L), MM, II, FF, CC);
     E = MM;
     I2 = II &  7;
     I1 = II >> 3;
-    if (0 < I1 && I1 < 7) E = add(E, r[I1]);
-    if (0 < I2 && I2 < 7) H = add(H, r[I2]);
+    if (0 < I1 && I1 < 7) {
+        E = add(E, r[I1]);
+    }
+    if (0 < I2 && I2 < 7) {
+        H = add(H, r[I2]);
+    }
     if (I1 == 7 && I2 == 7) {
         N++; H = zero;
     }
