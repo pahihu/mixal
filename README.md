@@ -12,9 +12,9 @@ If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](ht
 
 Changes:
 
-  * Mixmaster memory size is 250K words
-  * changed CPrM syntax to CPMr (CI = reg:M), r1-r6 is 5bytes + sign
-    in Mixmaster mode
+  * Mixmaster mode: memory size is 32KW, r1-r6 is 5 digits + sign,
+    the instruction format AAAA J0 LR CC, specify the address JAAAA
+  * changed CPrM syntax to CPMr (CI = reg:M)
   * fixed shifts, punch object card deck, NUM handles overpunch,
     debugged I/O, runs Peterson's load-and-go assembler (see `runprimes`)
   * fixed INT encoding (C=5,F=9), added MIX360 user manual and UT-MIX manual
