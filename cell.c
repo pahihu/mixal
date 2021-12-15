@@ -314,7 +314,7 @@ const char *address_to_string(Address address)
     static char buf[16];
 
     if (memory_size > 4000)
-        sprintf(buf, "%c%010o", address < 0 ? '-' : '+', abs(address));
+        sprintf(buf, "%c%05o", address < 0 ? '-' : '+', abs(address));
     else
         sprintf(buf, "%c%04o", address < 0 ? '-' : '+', abs(address));
 
@@ -326,7 +326,7 @@ const char *index_to_string(Cell index)
     static char buf[16];
 
     if (memory_size > 4000)
-        sprintf(buf, "%c%010lo", is_negative (index) ? '-' : '+', magnitude (index));
+        sprintf(buf, "%c%05lo", is_negative (index) ? '-' : '+', magnitude (index));
     else
         sprintf(buf, "%c%04lo", is_negative (index)  ? '-' : '+', magnitude (index));
 
