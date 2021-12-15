@@ -87,32 +87,41 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* drum B430 3750rpm (?) */
-{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc, 1000,     0},
-
-/* disk B475 100Kcps, 1500rpm, 20ms avg. access time */
-{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc, 2500, 20000},
-
-/* tape B422
- * 90ips, 200/556cpi, 2400' reel, 18KC/50KC, 320ips high-speed rewind
+/* Device characteristics
+ * ======================
+ * drum B430
+ *  3750rpm (?)
+ *  2ms transfer time + 8ms avg. rotational delay
  *
- * 100W requires 500 BCD chars = 0.9" + 0.75" gap = 1.65" @ 556cpi
- * 10' load-point marker ... 14' end-of-reel marker => 28,512" usable
+ * disk B475
+ *  1500rpm, head/track, 100Kcps
+ *  5ms transfer time + 20ms avg. rotational delay
+ *
+ * tape B422
+ *  90ips, 200/556cpi, 2400' reel, 18KC/50KC, 320ips high-speed rewind
+ *  100W requires 500 BCD chars = 0.9" + 0.75" gap = 1.65" @ 556cpi
+ *  10' load-point marker ... 14' end-of-reel marker => 28,512" usable
  *                                           17280 100W records
+ * card_in B122
+ *  200cpm, 80 column, 450 card hopper
+ *
+ * card_out B303
+ *  100cpm, 80 column, 800 card stacker
+ *
+ * printer B320
+ *  475lpm
+ *
+ * console ASR33
+ *  10cps
+ *
  */
-{ "tape",   BIN_RWRITE, 17280, 100, tape_in, tape_out, tape_ioc, 6875, 2578},
-
-/* card_in B122 200cpm, 80 column, 450 card hopper */
-{ "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,  150000,    0},
-
-/* card_out B303 100cpm, 80 column, 800 card stacker */
-{ "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,  300000,    0},
-
-/* printer B320 475lpm */
-{ "printer",TXT_APPEND,    0,  24, no_in,  text_out, printer_ioc, 63158, 2500},
-
-/* console ASR33 10cps */
-{ NULL,           NULL,    0,  14, console_in, console_out, no_ioc, 3500000, 0}
+{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,   1000, 4000},
+{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,   2500,10000},
+{ "tape",   BIN_RWRITE,17280, 100, tape_in, tape_out, tape_ioc,   6875, 2578},
+{ "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,   150000,    0},
+{ "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,   300000,    0},
+{ "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,63158,2500},
+{ NULL,           NULL,    0,  14, console_in,console_out, no_ioc,3500000, 0}
 
 };
 
@@ -290,8 +299,9 @@ static void io_schedule(Address pc,
     }
 
     if (operation == input || operation == output) {
-        if (device_type == disk)
-            busy += seek_time * (labs(devices[device].position - offset) % 64) / 64.0;
+        /* average rotational delay */
+        if (device_type == disk || device_type == drum)
+            busy += seek_time;
         io_mark_incomplete(buffer,
                            attributes(device)->block_size,
                            operation == input ? WRITE : READ);
