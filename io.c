@@ -87,19 +87,25 @@ static const struct Device_attributes {
     unsigned  seek_time;
 } methods[] = {
 
-/* drum B430 52Kcps */
-{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,  4750,    0},
+/* drum B430 3750rpm (?) */
+{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc, 1000,     0},
 
-/* disk B475 20Kcps */
-{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc, 12500,  500},
+/* disk B475 100Kcps, 1500rpm, 20ms avg. access time */
+{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc, 2500, 20000},
 
-/* tape B422 18Kcps */
-{ "tape",   BIN_RWRITE, 7680, 100, tape_in, tape_out, tape_ioc, 13889, 5416},
+/* tape B422
+ * 90ips, 200/556cpi, 2400' reel, 18KC/50KC, 320ips high-speed rewind
+ *
+ * 100W requires 500 BCD chars = 0.9" + 0.75" gap = 1.65" @ 556cpi
+ * 10' load-point marker ... 14' end-of-reel marker => 28,512" usable
+ *                                           17280 100W records
+ */
+{ "tape",   BIN_RWRITE, 17280, 100, tape_in, tape_out, tape_ioc, 6875, 2578},
 
-/* card_in B122 200cpm */
+/* card_in B122 200cpm, 80 column, 450 card hopper */
 { "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,  150000,    0},
 
-/* card_out B303 100cpm */
+/* card_out B303 100cpm, 80 column, 800 card stacker */
 { "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,  300000,    0},
 
 /* printer B320 475lpm */
@@ -109,6 +115,9 @@ static const struct Device_attributes {
 { NULL,           NULL,    0,  14, console_in, console_out, no_ioc, 3500000, 0}
 
 };
+
+/* paper tape reader B141 1000/500cps, 10cpi */
+/* paper tape punch B341 100cps, 10cpi */
 
 static const struct Device_attributes *attributes (unsigned device)
 {
@@ -218,7 +227,7 @@ static void io_schedule(Address pc,
                         Byte device, Operation operation,
                         Cell rX, Cell offset, Address buffer)
 {
-    unsigned busy, seek_time, u;
+    unsigned busy, seek_time, io_time, u;
     enum DeviceType device_type;
     long position;
 
@@ -240,24 +249,32 @@ static void io_schedule(Address pc,
     position      = devices[device].position;
     device_type   = devices[device].type;
     seek_time     = attributes(device)->seek_time;
+    io_time       = attributes(device)->io_time;
 
     busy = 0;
     if (operation == control) {
+        unsigned dt = seek_time;
         switch (device_type) {
         case tape:
             u = magnitude(offset);
             if (0 == u)                         /* --- rewind --- */
                 busy = position;
-            else if (is_negative(offset))       /* --- skip backward --- */
+            else if (is_negative(offset)) {     /* --- skip backward --- */
                 busy = u < position ? u : position;
+                dt = io_time;
+            }
             else {                              /* --- skip forward --- */
                 busy = position + u;
                 if (busy >= attributes(device)->size)
                     busy = attributes(device)->size - position;
+                dt = io_time;
             }
             break;
         case disk:
-            busy = labs(position - offset) / 64;
+            // head/track
+            busy = 0;
+            // 1 head/surface
+            // busy = labs(position - offset) / 64;
             break;
         case printer:
             busy = 132 - (position % 132);
@@ -265,16 +282,16 @@ static void io_schedule(Address pc,
         default:
             break;
         }
-        busy *= seek_time;
+        busy *= dt;
     }
     else {
         if ((device_type != console) || (operation != input))
-            busy = attributes(device)->io_time;
+            busy = io_time;
     }
 
     if (operation == input || operation == output) {
         if (device_type == disk)
-            busy += seek_time * labs(devices[device].position - offset);
+            busy += seek_time * (labs(devices[device].position - offset) % 64) / 64.0;
         io_mark_incomplete(buffer,
                            attributes(device)->block_size,
                            operation == input ? WRITE : READ);
