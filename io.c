@@ -102,6 +102,8 @@ static const struct Device_attributes {
  *  100W requires 500 BCD chars = 0.9" + 0.75" gap = 1.65" @ 556cpi
  *  10' load-point marker ... 14' end-of-reel marker => 28,512" usable
  *                                           17280 100W records
+ *  4.5ms start time + 10ms transfer time + 4.2ms stop time
+ *
  * card_in B122
  *  200cpm, 80 column, 450 card hopper
  *
@@ -117,7 +119,7 @@ static const struct Device_attributes {
  */
 { "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,   1000, 4000},
 { "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,   2500,10000},
-{ "tape",   BIN_RWRITE,17280, 100, tape_in, tape_out, tape_ioc,   6875, 2578},
+{ "tape",   BIN_RWRITE,17280, 100, tape_in, tape_out, tape_ioc,   9850, 2578},
 { "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,   150000,    0},
 { "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,   300000,    0},
 { "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,63158,2500},
