@@ -1,0 +1,22 @@
+*          MIXAP TEST PROGRAM
+                PLEASE BE A GOOD ASSEMBLER
+A          ORIG 1,1+1-1(1-1)
+A          ORIG -5+9*5
+0H         MOVE (*)
+0H         JMP  0F(0B)
+B          EQU  -1/2+2//2
+           LDA  =0F=
+           CMPA =B,(0-0)=(2-5)
+           STX  QUEER
+           ORIG -5
+           SLAX 0F,2(1-)
+           JBUS 0F(1)
+           CON  1.0
+           XXX  0F+1
+A          IOC  =2=2
+           CON  ***(2-4),*(1-1)
+           EQU  0/0
+           ORIG 5(3-2)
+0H         ALF  OKAY
+           HLT  LENGTHISBAD+3
+           END  1000000001
