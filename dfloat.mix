@@ -1,0 +1,147 @@
+*
+* PROGRAM A (DOUBLE-PRECISION ADDITION).
+*
+ABS        EQU  1:5               FIELD DEFINITION FOR ABSOLUTE VALUE
+SIGN       EQU  0:0               FIELD DEFINITION FOR SIGN
+EXPD       EQU  1:2               DOUBLE-PRECISION EXPONENT FIELD
+DFSUB      STA  TEMP              DOUBLE-PRECISION SUBTRACTION:
+           LDAN TEMP              CHANGE SIGN OF V.
+DFADD      STJ  EXITDF            DOUBLE-PRECISION ADDITION:
+           CMPA ACC(ABS)          COMPARE |V| WITH |U|.
+           JG   1F
+           JL   2F
+           CMPX ACCX(ABS)
+           JLE  2F
+1H         STA  ARG               IF |V|>|U|, INTERCHANGE U :=: V.
+           STX  ARGX
+           LDA  ACC
+           LDX  ACCX
+           ENT1 ACC               (ACC AND ACCX ARE IN CONSECUTIVE
+           MOVE ARG(2)                LOCATIONS.)
+2H         STA  TEMP
+           LD1N TEMP(EXPD)        RI1 := -EV.
+           LD2  ACC(EXPD)         RI2 := EU.
+           INC1 0,2               RI1 := EU - EV.
+           SLAX 2                 REMOVE EXPONENT.
+           SRAX 1,1               SCALE RIGHT.
+           STA  ARG               0 V1 V2 V3 V4
+           STX  ARGX                            V5 V6 V7 V8 V9
+           STA  ARGX(SIGN)        STORE TRUE SIGN OF V IN BOTH HALVES.
+           LDA  ACC               (WE KNOW THAT U HAS THE SIGN OF THE ANSWER.)
+           LDX  ACCX              RAX := U.
+           SLAX 2                 REMOVE EXPONENT.
+           STA  ACC               U1 U2 U3 U4 U5
+           SLAX 4
+           ENTX 1
+           STX  EXPO              EXPO := 1 (SEE BELOW).
+           SRC  1                 1 U5 U6 U7 U8
+           STA  1F(SIGN)          A TRICK, SEE COMMENTS IN TEXT.
+           ADD  ARGX(0:4)         ADD 0 V5 V6 V7 V8.
+           SRAX 4
+1H         DECA 1                 RECOVER FROM INSERTED 1. (SIGN VARIES)
+           ADD  ACC(0:4)          ADD MOST SIGNIFICANT HALVES.
+           ADD  ARG               (OVERFLOW CANNOT OCCUR)
+DNORM      JANZ 1F                NORMALIZATION ROUTINE:
+           JXNZ 1F                FW IN RAX, EW = EXPO + RI2.
+DZERO      STA  ACC               IF FW = 0, SET EW := 0.
+           JMP  9F
+2H         SLAX 1                 NORMALIZE TO THE LEFT.
+           DEC2 1
+1H         CMPA =0=(1:1)          IS THE LEADING BYTE ZERO?
+           JE   2B
+           SRAX 2                 (ROUNDING OMITTED)
+           STA  ACC
+           LDA  EXPO              COMPUTE FINAL EXPONENT.
+           INCA 0,2
+           JAN  EXPUND            IS IT NEGATIVE?
+           STA  ACC(EXPD)
+           CMPA =1(3:3)=          IS IT MORE THAN TWO BYTES?
+           JL   8F
+EXPOVD     HLT  20
+EXPUND     HLT  10
+8H         LDA  ACC               BRING ANSWER INTO RA.
+9H         STX  ACCX
+EXITDF     JMP  *                 EXIT FROM SUBROUTINE.
+ARG        CON  0
+ARGX       CON  0
+ACC        CON  0                 FLOATING POINT ACCUMULATOR
+ACCX       CON  0
+EXPO       CON  0                 PART OF "RAW EXPONENT"
+*
+* PROGRAM M (DOUBLE-PRECISION MULTIPLICATION).
+*
+BYTE       EQU  1(4:4)            BYTE SIZE
+QQ         EQU  BYTE*BYTE/2       EXCESS OF DOUBLE-PRECISION EXPONENT
+DFMUL      STJ  EXITDF            DOUBLE-PRECISION MULTIPLICATION:
+           STA  TEMP
+           SLAX 2                 REMOVE EXPONENT.
+           STA  ARG               VM
+           STX  ARGX              VL
+           LDA  TEMP(EXPD)
+           ADD  ACC(EXPD)
+           STA  EXPO              EXPO := EU + EV.
+           ENT2 -QQ               RI2 := -QQ.
+           LDA  ACC
+           LDX  ACCX
+           SLAX 2                 REMOVE EXPONENT.
+           STA  ACC               UM
+           STX  ACCX              UL
+           MUL  ARGX              UM X VL
+           STA  TEMP
+           LDA  ARG(ABS)
+           MUL  ACCX(ABS)         |VM X UL|
+           SRA  1                 0 X X X X
+           ADD  TEMP(1:4)         (OVERFLOW CANNOT OCCUR)
+           STA  TEMP
+           LDA  ARG
+           MUL  ACC               VM X UM
+           STA  TEMP(SIGN)        STORE TRUE SIGN OF RESULT.
+           STA  ACC               NOW PREPARE TO ADD ALL THE
+           STX  ACCX                 PARTIAL PRODUCTS TOGETHER.
+           LDA  ACCX(0:4)         0 X X X X
+           ADD  TEMP              (OVERFLOW CANNOT OCCUR)
+           SRAX 4
+           ADD  ACC               (OVERFLOW CANNOT OCCUR)
+           JMP  DNORM             NORMALIZE AND EXIT.
+*
+* PROGRAM D (DOUBLE-PRECISION DIVISION).
+*
+DFDIV      STJ  EXITDF            DOUBLE-PRECISION DIVISION:
+           JOV  OFLO              ENSURE THAT OVERFLOW IS OFF.
+           STA  TEMP
+           SLAX 2                 REMOVE EXPONENT.
+           STA  ARG               VM
+           STX  ARGX              VL
+           LDA  ACC(EXPD)
+           SUB  TEMP(EXPD)
+           STA  EXPO              EXPO := EU - EV.
+           ENT2 QQ+1              RI2 := QQ + 1.
+           LDA  ACC
+           LDX  ACCX
+           SLAX 2                 REMOVE EXPONENT.
+           SRAX 1                 (SEE ALGORITHM 4.2.1M)
+           DIV  ARG               IF OVERFLOW, IT IS DETECTED BELOW.
+           STA  ACC               WM
+           SLAX 5                 USE REMAINDER IN FURTHER DIVISION.
+           DIV  ARG
+           STA  ACCX              +/-WL
+           LDA  ARGX(1:4)
+           ENTX 0
+           DIV  ARG(ABS)          RA := TRUNC(|B^4 VL/VM|)/B^5.
+           JOV  DVZROD            DID DIVISION CAUSE OVERFLOW?
+           MUL  ACC(ABS)          RAX := |WM VL/B VM|, APPROXIMATELY.
+           SRAX 4                 MULTIPLY BY B, AND SAVE
+           SLC  5                     THE LEADING BYTE IN RX.
+           SUB  ACCX(ABS)         SUBTRACT |WL|.
+           DECA 1                 FORCE MINUS SIGN.
+           SUB  WM1
+           JOV  *+2               IF NO OVERFLOW, CARRY ONE MORE
+           INCX 1                      TO UPPER HALF.
+           SLC  5                 (NOW RA <= 0)
+           ADD  ACC(ABS)          RA := |WM| - |RA|.
+           STA  ACC(ABS)          (NOW RA >= 0)
+           LDA  ACC               RA := WM WITH CORRECT SIGN.
+           JMP  DNORM             NORMALIZE AND EXIT.
+DVZROD     HLT  30                UNNORMALIZED OR ZERO DIVISOR
+1H         EQU  1(1:1)
+WM1        CON  1B-1,BYTE-1(1:1)  WORD SIZE MINUS ONE
