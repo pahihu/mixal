@@ -1,0 +1,1124 @@
+           ORIG 3999
+           JMP  BEGIN
+*
+*        THREETRAN -- MIX   COMPILER
+*
+*               D. KNUTH
+*               MARCH, 1965
+*               DEBUGGED MARCH 23, 196
+*
+BYTESIZE   EQU  1(4:4)
+READER     EQU  16
+PRINTER    EQU  18
+TAPE       EQU  1
+TBUF       EQU  0
+OPBUF      EQU  0
+*
+*          CONTENTS OF BUFFER AREAS
+*
+           ORIG 0
+LOADER     ENT5 140,6
+           ENT3 100
+1H         ENN3 0,3
+2H         IN   0,5(TAPE)
+           INC5 0,3
+           ENT1 99
+           ENT2 99,5
+           LDA  99,5
+           DEC2 1
+           ADD  0,2
+           DEC1 1
+           J1P  *-3,6
+           JAZ  2F,6
+           HLT  1
+           IOC  2(TAPE)
+           IN   0,5(TAPE)
+           DEC5 0,3
+           JMP  2B,6
+2H         LD4  0,2(5:5)
+           ENT1 98,5
+           J4Z  5F,6
+           LD1  0,2(3:4)
+           ST4  *+1,6(4:4)
+           MOVE 1,2(*)
+           INC2 1,4
+           JMP  2B,6
+3H         DEC2 1
+           LD4  0,2(0:2)
+           STA  0,2(0:2)
+           ENT2 0,4
+           J4NN *-3,6
+4H         DEC1 1
+5H         LD2  0,1(4:5)
+           LDA  0,1(0:2)
+           J2P  3B,6
+           JAZ  1B,6
+           IOC  0(TAPE)
+           LD1  0,1(2:3)
+           JOV  0,1
+           JMP  0,1
+*
+SSIZE      EQU  35  SIZE IS ORBUF - STANDARD
+           ORIG 47
+STANDARD   CON  SSIZE-1,*+1(3:4)
+OUTSUB     STJ  9F
+           LD1N 1F
+           ST1  1F
+           ENTX 0
+           JAP  *+3
+           ENTX 45
+           STX  OPBUF+14,1(1:1)
+           CHAR
+           STA  OPBUF+12,1
+           STX  OPBUF+13,1
+           OUT  OPBUF+12,1(PRINTER)
+9H         JMP  *
+1H         CON  12
+ORBUF      EQU  *+21
+INSUB      STJ  9F
+           LD1N 1F
+           ST1  1F
+           IN   ORBUF+8,1(READER)
+           LD1N 1F
+           LDA  ORBUF+8,1
+           LDX  ORBUF+9,1
+           NUM
+           LDX  ORBUF+10,1(1:1)
+           DECX 45
+9H         JXNZ *
+           STA  ORBUF+10,1
+           LDAN ORBUF+10,1
+           JMP  9B-1
+1H         CON  8
+INIT0      IN   ORBUF+16(READER)
+           IOC  0(PRINTER)
+           STZ  OPBUF+2
+           ENT1 OPBUF+3
+           MOVE OPBUF+2(45)
+           JMP  OBJECT
+           ORIG ORBUF+32
+OBJECT     EQU  *      BEGINNING OF OBJECT PROGRM
+*
+PBU1       EQU  *+1
+           CON  0
+           ALF  .....
+           ALF   THRE
+           ALF  ETRAN
+           ALF   -- M
+           ALF  IX  C
+           ALF  OMPIL
+           ALF  ER ..
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           ALF  .....
+           CON  *+2
+PBUF2      EQU  *+1
+           CON  0
+           ORIG PBUF2+24
+           CON  PBUF1
+RBUF1      ORIG *+16
+           CON  *+1
+RBUF2      ORIG *+16
+           CON  RBUF1
+*
+*       SUBROUTINES FOR INPUT/OUTPUT
+*
+COMPL1     STA  INST
+COMPL      STJ  9F
+           ST5  TEMP5
+           ST6  TEMP6
+LSW        JMP  2F
+           LD1  PBUF
+FMTSW      JMP  1F
+           LDA  INST
+           CHAR
+           STA  4,1
+           STX  5,1
+           JMP  3F
+1H         LDA  INST(0:2)
+           JANN *+3
+           ENTX 45
+           STX  3,1(5:5)
+           CHAR
+           STX  4,1(1:4)
+           LDA  INST(3:3)
+           CHAR
+           STX  5,1(1:2)
+           LDA  INST(4:4)
+           CHAR
+           STX  5,1(4:5)
+           LDA  INST(5:5)
+           CHAR
+           STX  6,1(2:3)
+3H         LDA  PROG(1:2)
+           CHAR
+           STX  2,1(2:5)
+           INC1 7
+           MOVE COMT(2)
+           STZ  COMT
+           STZ  COMT1
+           JMP  PRINTOUT
+2H         LDX  PROG(1:2)
+           INCX 1
+           STX  PROG(1:2)
+           DECX 1
+           JBUS *(TAPE)
+           LD6  PT1
+           CMPX MAXLOC
+           JGE  1F
+           CMPX EASYLOC
+           JE   2F
+1H         JMP  SETN
+           STX  BASELOC
+           STX  TBUF,6(0:4)
+           INCX BYTESIZE
+           STX  MAXLOC
+           DECX BYTESIZE
+           ST6  BASEINDEX
+           INC6 1
+2H         INCX 1
+           STX  EASYLOC
+           LDA  INST
+           STA  TBUF,6
+           INC6 1
+           LD5  PT2
+           JMP  3F
+FIXUP      STJ  9F
+           ST5  TEMP5
+           ST6  TEMP6
+           JBUS *(TAPE)
+           LD5  PT2
+           STA  TBUF+1,5
+           DEC5 1
+           LD6  PT1
+3H         CMP6 PT2
+SWITCH     JL   4F
+           JMP  SETN
+           STZ  TBUF+1,5
+           STZ  TBUF,6
+8H         ENT5 97
+           LDAN TBUF+98
+           SUB  TBUF,5
+           DEC5 1
+           J5NN *-2
+           STA  TBUF+99
+           OUT  TBUF(TAPE)
+           JOV  *+1
+           ST5  EASYLOC
+           ENT5 97
+           ENT6 0
+4H         ST6  PT1
+           ST5  PT2
+           LD5  TEMP5
+           LD6  TEMP6
+9H         JMP  *
+SETN       STJ  1F
+           LDA  EASYLOC
+           JAN  1F
+           SUB  BASELOC
+           LD1  BASEINDEX
+           STA  TBUF,1(5:5)
+1H         JMP  *
+EASYLOC    CON  -1
+PT1        CON  44
+PT2        CON  44
+*
+READIN     STJ  9F
+           LD1  RBUF
+           IN   0,1(READER)
+           LD1  16,1
+           ST1  RBUF
+           ST1  1F(0:2)
+           LD1  PBUF
+           INC1 3
+1H         MOVE *(16)
+           JMP  PRINTOUT
+9H         JMP  *
+RBUF       CON  RBUF1
+*
+PRINTOUT   STJ  1F
+           LD1  PBUF
+           OUT  0,1(PRINTER)
+           LD1  24,1
+           ST1  PBUF
+           MOVE -1,1(24)
+1H         JMP  *
+PBUF       CON  PBUF1
+*
+ERROR1     STJ  ERRSW
+ERROR      CHAR
+           LD1  PBUF
+           STX  2,1(2:3)
+           ENTA 49
+           ENTX 0
+           SRAX 5,5
+           LD3N RBUF
+           INC3 0,1
+           INC3 2,6
+           STA  0,3
+           STX  1,3
+           MOVE 2F(2)
+           LDA  ERRCOUNT
+           INCA 1
+           STA  ERRCOUNT
+           JMP  PRINTOUT
+ERRSW      JMP  NEXT1
+2H         ALF  ****
+           ALF  ERROR
+*
+*     BEGINNING OF COMPILER AND LEXICAL SCAN
+*
+RATOR      ORIG *+30
+RAND       ORIG *+30
+LOUP       CON  0
+           CON  OBJECT(1:2),2(3:3)
+           ORIG *+18
+BEGIN      IOC  0(TAPE)
+           IN   RBUF2(READER)
+           IOC  0(PRINTER)
+           JMP  FIXUP
+           ENTA SSIZE
+           STA  PT1
+           ENT1 TBUF
+           JBUS *(TAPE)
+           MOVE STANDARD(SSIZE)
+           JMP  PRINTOUT
+2H         JMP  READIN
+           LD1  RBUF
+           LDA  0,1
+           CMPA 1F
+           JNE  3F
+           STZ  LSW(5:5)
+           JMP  2B
+1H         ALF  LIST
+*
+NEXT       J2NZ BAD
+NEXT1      JMP  READIN
+           LD1  RBUF
+           LDA  1,1(1:1)
+           JANZ NEXT1
+LABEL      LDA  INSLABEL(0:2)
+           JAN  1F
+           INCA 1
+           ADD  PROG
+           JMP  FIXUP
+           LDA  UNDLABEL
+           STA  INSLABEL
+1H         LD1  RBUF
+3H         LDX  0,1
+           JXZ  1F
+           ENTA 0
+           NUM
+           JMP  CSERCH
+           LDA  1,1(3:3)
+           DECA 3
+           JAZ  *+6
+           LD6  RBUF
+           INC6 1
+           ENT5 -5
+           ENTA 12
+           JMP  ERROR
+           LDA  1,1(0:2)
+           LDX  PROG(0:2)
+           STX  1,1(0:2)
+           ENTX 2
+           STX  1,1(3:3)
+           JAN  1F
+           INCA 1
+           ADD  PROG
+           JMP  FIXUP
+1H         ENT3 0
+           ENT2 0
+           ENT4 0
+           STZ  S
+           STZ  REG
+           STZ  RX
+NEWCARD    LD6  RBUF
+           ENTA 49
+           STA  14,6(3:3)
+           INC6 1
+           ENT5 -4
+           LDA  LDELIM
+           STA  RATOR
+*
+LEXSCAN    ENT1 5
+           LDX  0,6
+           SLAX 5,5
+           ENTA 0
+           JXNZ 1F
+           ENT5 -5
+           INC6 1
+           LDX  0,6
+           JXZ  *-2
+1H         CMPX =40(1:1)=(1:1)
+           JL   2F
+           INC5 1        SPECIAL CHARACTER SCANNED
+           SLAX 1
+           DECA 52
+           JAN  SSCAN
+BADCHAR    ENTA 9
+           JMP  ERROR
+2H         SLAX 1
+           INC5 1
+           JAZ  1B
+           DEC1 1
+           J1NZ *+2
+           STA  TEMP
+           J5N  *+4
+           ENT5 -5
+           INC6 1
+           LDX  0,6
+           CMPX =0=(1:1)
+           JE   *+3
+           CMPX =40(1:1)=(1:1)
+           JL   2B
+           ENTX 0
+           J1NN 2F
+           CMP1 =-5=
+           JGE  *+3
+           ENTA 11
+           JMP  ERROR
+           SLC  10,1
+           LDA  TEMP
+           JMP  3F
+2H         SLAX 0,1
+3H         CMPA =30(1:1)=(1:1)
+           JGE  CONST
+IDENT      ENT1 ROOT
+           ST2  TEMP         HERE BEGINS THE PREVIOUS "SEARCH" ROUTINE
+1H         ENT2 0,1
+           CMPA 0,1
+           JL   2F
+           JG   3F
+           CMPX 1,1
+           JE   7F
+           JG   3F
+2H         LD1  2,1(2:3)
+           J1P  1B
+           LD1  Y
+           ST1  2,2(2:3)
+           JMP  4F
+3H         LD1  2,1(4:5)
+           J1P  1B
+           LD1  Y
+           ST1  2,2(4:5)
+4H         ENT2 4,1
+           ST2  Y
+           DEC2 3998
+           J2NN NOROOM
+           STA  0,1
+           STX  1,1
+           STZ  2,1
+7H         LD2  TEMP        HERE END THE PREVIOUS "SEARCH" ROUTINE
+           LDA  2,1(1:1)
+           CMPA =1=
+           JG   SSCAN
+           STZ  RAND+1,3
+           INC1 3
+8H         INC3 1
+           ST1  RAND,3(0:2)
+           CMP3 =29=
+           JL   SSCAN
+NOROOM     ENTA 13
+           JMP  ERROR
+CONST      SRAX 5,1
+           NUM
+           JMP  CSERCH
+           LDA  UNDLABEL
+           STA  RAND+1,3
+           ENTA 0
+           INC1 2
+           JMP  8B
+           CON  100000
+UNDLABEL   CON  -1(0:2),3(3:3)
+INSLABEL   CON  -1(0:2),3(3:3)
+*
+CSERCH     STJ  9F
+           ENT1 CROOT
+           ST2  TEMP
+1H         ENT2 0,1
+           CMPA 0,1
+           JE   7F
+           JG   3F
+           LD1  1,1(4:5)
+           J1P  1B
+           LD1  Y
+           ENTX 0,2
+           ST1  1,2(4:5)
+           JMP  4F
+3H         LD1  2,1(4:5)
+           DEC2 0,1
+           J2N  1B
+           INC2 0,1
+           LD1  Y
+           LDX  2,2
+           ST1  2,2(4:5)
+4H         ENT2 3,1
+           ST2  Y
+           STX  2,1(4:5)
+           DEC2 3998
+           J2NN NOROOM
+           STA  0,1
+           LDX  UNDLABEL
+           STX  1,1
+           ENNX BYTESIZE+4
+           STX  2,1(0:3)
+7H         LD2  TEMP
+9H         JMP  *
+CROOT      CON  100
+           CON  -1(0:2),3(3:3)
+           CON  -1(0:2),4(3:3)
+*
+*           SYNTAX SCANNER
+*
+TRUNSTILE  ENTA 12
+SSCAN      STA  OP
+           LD1  OP
+           LDA  CONTROL,1
+           JAN  2F
+           LDX  CONTROL,1(2:2)
+           DECX 0,4
+           JXNZ BAD
+4H         LD4  CONTROL,1(3:3)
+2H         STA  *+1(1:2)
+           JMP  *
+UNITARY    INC1 18
+           J4Z  STACK
+           ENT4 0
+*
+COMPARE1   LD1  OP
+           LDA  CONTROL,1
+COMPARE    CMPA RATOR,2(1:1)
+           JG   STACK
+           LD1  RATOR,2(4:5)
+           DEC2 1
+           LDA  RAND,3
+           JMP  0,1
+*
+STACK1     LD1  OP
+STACK      DEC2 29
+           J2NN NOROOM
+           INC2 30
+           LDA  STACKT,1
+           STA  RATOR,2
+           JAP  LEXSCAN
+           STZ  RATOR(2:2)
+           JMP  EQSTAK
+*
+EQUAL      LDX  S
+           JXZ  COMPARE
+           ENTA 2
+           JMP  SSCAN
+LPREN      LDA  OP
+           INCA 9
+           JAZ  LEXSCAN
+           ENTA 1
+           JMP  ERROR
+IF1        ENTA 1
+           STA  S
+           JMP  STACK
+IF2        LDX  OP
+           DECX 13
+           JXNZ BAD
+           LDX  S
+           JXZ  IF3
+           JMP  BAD
+REPL       LDX  RATOR,2(3:3)
+           JXNZ REPL1
+BAD        ENTA 10
+           JMP  ERROR
+ARRAY1     ENTX 1
+           STX  LPRENR(2:2)
+           JMP  STACK
+LD         LDX  OP
+           DECX 12
+           ENTA 2
+           JXNZ ERROR
+           ENTA 14
+           LDX  RATOR(2:2)
+           JXNZ ERROR
+           JMP  NEXT1
+*
+CARDEND    LD1  RBUF
+           LD1  16,1
+           JBUS *(READER)
+           LDA  1,1(1:1)
+           JAZ  TURNSTILE
+           JMP  READIN
+           JMP  NEWCARD
+*
+*           XMIX INTERPRETIVE ROUTINE
+*
+XMIX       STJ  XMIX(0:5)
+XMIXC      LD1  XMIXP
+           LDA  0,1
+           STA  XMIXI
+           INC1 1
+           ST1  XMIXP
+           LD1  XMIXI(3:3)
+           JMP  *+1,1
+           JMP  XMIXC
+           JMP  RE
+           JMP  FR
+           JMP  CI
+           JMP  CP
+           JMP  LOAD
+           LD1  XMIXI(1:2)
+           JMP  0,1
+*
+RE         STA  RX(5:5)
+           DEC3 1
+           ST3  REG
+           STZ  RAND,3
+           JMP  COMPARE1
+*
+FR         JMP  FRSUB
+           JMP  XMIXC
+FRSUB      STJ  1F
+LD1        LD1  REG
+           J1Z  1F
+           LD1  TEMPS(4:5)
+           J1P  2F
+           LD1  Y
+           ENTX 1,1
+           STX  Y
+           DECX 3998
+           JXNN NOROOM
+           STZ  0,1
+           ENTX 5
+           STX  0,1(3:3)
+2H         JMP  ADDR
+           LDA  0,1
+           STA  TEMPS(4:5)
+           ENTA 1
+           STA  0,1(3:3)
+           ENTA 0,1
+           LD1  REG
+           STA  RAND,1(1:2)
+           STZ  REG
+           LDA  STA
+           ADD  RX
+           STA  INST(3:5)
+           STZ  RX
+           JMP  COMPL
+1H         JMP  *
+*
+LOAD       LD1N XMIXI(0:2)
+           INC1 0,3
+           ST1  3F(0:2)
+           LDA  RAND,1
+           LDX  RX
+           JANZ 1F
+           STZ  RX
+           JXZ  XMIXC
+           LDA  SLAX5
+           JMP  COMPL1
+           JMP  XMIXC
+SLAX5      SLAX 5
+1H         JMP  FRSUB
+3H         ENT1 *
+           ST1  REG
+*
+CI         LD1N XMIXI(0:2)
+           INC1 0,3
+           LDA  RAND,1
+STA        STA  V
+           LD1  V(4:5)
+           J1Z  1F
+           JMP  ADDR
+           LDA  LD1
+           STA  INST(3:5)
+           JMP  COMPL
+1H         LD1  V(1:2)
+           JMP  ADDR
+2H         LDA  XMIXI(4:5)
+           STA  INST(3:5)
+           LDA  V(4:5)
+           JAZ  *+3
+           ENTA 1
+           STA  INST(3:3)
+2H         JMP  COMPL
+           JMP  XMIXC
+CP         STA  INST
+           STZ  INST(3:3)
+           JMP  2B
+*
+ADDR       STJ  9F
+           LDA  0,1
+           STA  INST
+           ST2  TEMP
+           LD2  INST(3:3)
+           JMP  *+1,2
+           JMP  0F   VARIABLE
+           JMP  1F    ACTIVE TEMP
+           JMP  2F      LABEL
+           JMP  3F   FUTURE LABEL
+           JMP  4F     CONSTANT
+           JMP  5F   INACTIVE TEMP
+4H         LDA  -2,1
+           CHAR
+           STA  COMT
+           JMP  FREF
+           JMP  6F
+3H         JMP  FREF
+2H         LDA  -1,1(1:5)
+           CHAR
+           CMPA 7F
+           JG   8F
+           JMP  6F
+1H         LDA  TEMPS
+           STA  0,1(3:5)
+           ST1  TEMPS(4:5)
+5H         LDX  *+2
+           JMP  4F
+           ALF  TEMP
+0H         LDA  -3,1
+           LDX  -2,1
+           STA  COMT
+4H         LDA  0,1(1:2)
+           JANZ 4F
+           LDA  VAR
+           DECA 1
+           STA  VAR
+           STA  0,1(1:2)
+4H         STA  INST(1:2)
+6H         STX  COMT1
+8H         LD2  TEMP
+9H         JMP  *
+7H         ALF  00000
+FREF       STJ  9F
+           LDA  PROG(0:2)
+           STA  0,1(0:2)
+           ENTA 47
+           LD2  PBUF
+           STA  3,2(4:4)
+9H         JMP  *
+TEMPS      CON  5(3:3)
+*
+*        GENERATORS
+*
+ADD        JAZ  1F
+           JMP  XMIX
+           LDA  1,5  LD(1)
+           ADD  0,3    CI ADD(0)
+           NOP  0,1    RE(0)
+1H         JMP  XMIX
+           LDA  0,5   LD(0)
+           ADD  1,3   CI ADD(1)
+           NOP  0,1    RE(0)
+SUB        JMP  XMIX
+           LDA  1,5   LD(1)
+           SUB  0,3    CI SUB(0)
+           NOP  0,1    RE(0)
+MUL        JAZ  1F
+           JMP  XMIX
+           LDA  1,5   LD(1)
+           MUL  0,3    CI MUL(0)
+           MOVE 0,1(0)   RE(1)
+1H         JMP  XMIX
+           LDA  0,5   LD(0)
+           MUL  1,3   CI MUL(1)
+           MOVE 0,1(0)   RE(1)
+DIV        JMP  XMIX
+           LDA  1,5     LD(1)
+           SRAX 5,4    CP SRAX 5
+           DIV  0,3  CI DIV(0)
+           NOP  0,1   RE(0)
+NEG        INC3 1
+           JMP  XMIX
+           NOP  0,2    FR
+           LDAN 1,3    CI LDAN(1)
+           NOP  0,1     RE(0)
+SUBSC      JAZ  1F
+           LDA  RAND,3(4:5)
+           JAZ  2F
+           JMP  XMIX
+           LDA  0,5
+           NOP  *+1,6   XT *+1
+1H         JMP  FRSUB
+2H         LDA  RAND,3(1:2)
+           STA  RAND-1,3(4:5)
+           DEC3 1
+           JMP  COMPARE1
+EQSTAK     LDA  RAND,3(1:2)
+           STA  LHS
+           ENT1 0,3
+           DEC1 1
+           J1Z  LEXSCAN
+           CMPA RAND,1(4:5)
+           JNE  *-3
+           JMP  XMIX
+           NOP  0,2   FR
+           LDA  0,5     LD(0)
+           NOP  0,2     FR
+           NOP  *+1,6    XT *+1
+           ENT1 -1,3
+           LDX  RAND,3(1:2)
+           LDA  LHS
+           STA  RAND,3(1:2)
+           CMPA RAND,1(4:5)
+           JNE  *+2
+           STX  RAND,1(4:5)
+           DEC1 1
+           J1P  *-4
+           JMP  LEXSCAN
+REPL1      LD1  RAND-1,3(1:2)
+           J1Z  NOVAR
+           LDA  0,1(3:3)
+           JAZ  *+3
+NOVAR      ENTA 4
+           JMP  ERROR
+           LDA  RX
+           JANZ 1F
+           JMP  XMIX
+           LDA  0,5
+           STA  1,3   CI STA(1)
+           NOP  0,1    RE(0)
+1H         JMP  XMIX
+           STX  1,3   CI STX(1)
+           MOVE 0,1(0)   RE(1)
+*
+LSS        ENTX 7    "GE"
+           JMP  2F
+GTR        ENTX 9    "LE"
+           JMP  2F
+EQL        ENTX 8   "NE"
+2H         STX  1F(4:4)
+           DECX 16
+           STX  3F(4:4)
+           LDX  4F
+           STX  RAND+1,3
+           JAZ  5F
+           JMP  XMIX
+           LDA  1,5    LD(1)
+           CMPA 0,3
+1H         JNE  -1,3   CI JNE(-1)
+           NOP  *+1,6    XT
+6H         LDA  S
+           DECA 1
+           STA  S
+           DEC3 2
+           STZ  REG
+           JMP  COMPARE1 RETURN TO SYNTAX SCAN
+5H         JMP  XMIX
+           LDA  0,5   LD(0)
+           CMPA 1,3   CI CMPA(1)
+3H         JNE  -1,3   CI JNE(-1)
+           NOP  6B,6
+4H         CON  INSLABEL(1:2)
+IF3        EQU  LEXSCAN
+*
+GO         LDX  RAND,3(3:3)
+           ENTA 7
+           JXZ  ERROR
+           LD1  RAND,3(1:2)
+           DEC1 1
+           JMP  ADDR
+           ENTA 39   "JMP"
+           STA  INST(3:5)
+           JMP  COMPL
+           JMP  NEXT
+FOR0       STZ  REG    COMMA OCCURS
+           LDA  RX
+           STA  3F(1:2)
+           STZ  RX
+           JMP  STACK1
+FOR1       LDA  RAND,3(3:3)
+           JAZ  2F
+           LDA  SLAX5
+3H         ENTX *
+           JXNZ COMPL1
+           JMP  1F
+2H         LDA  LHS
+           STA  RAND+1(1:2)
+           LDA  RAND,3
+           JAZ  4F
+           JMP  XMIX
+           LDA  0,5
+4H         JMP  XMIX
+           LDA  1,5
+           NOP  *+1,6   XT
+           LD1  RAND,3(1:2)
+           ENTA 5
+           STA  0,1(3:3)
+1H         LD1  L
+           INC1 2
+           CMP1 =20=
+           JGE  NOROOM
+           ST1  L
+           LDA  LHS
+           STA  LOOP,1
+           LDA  UNDLABEL(0:3)
+           STA  LOOP,1(0:3)
+           LDA  PROG(1:2)
+           STA  LOOP+1,1(1:2)
+           ENTA 2
+           STA  LOOP+1,1(3:3)
+           ENTA LOOP,1
+           STZ  RAND+1,3
+           STA  RAND+1,3(1:2)
+           JMP  XMIX
+           CMPA 0,3  CI CMPA(0)
+           JG   -1,3  CI JG(-1)
+           NOP  NEXT,6   XT
+END        LD1  L
+           LDA  RAND,3(1:2)
+           CMPA LOOP,1(4:5)
+           JNE  BADFOR
+           LDA  LOOP,1
+           STA  INSLABEL
+           ENTA LOOP+1,1
+           STZ  RAND+1,3
+           STA  RAND+1,3(1:2)
+           DEC1 2
+           ST1  L
+           JMP  XMIX
+           LDA  0,3   CI LDA(0)
+           INCA 1,4   CP INCA 1
+           STA  0,3   CI STA(0)
+           JMP  -1,3  CI JMP(-1)
+           NOP  NEXT,6  XT NEXT
+BADFOR     ENTA 8
+           JMP  ERROR
+*
+IN         LD1  RAND,3(1:2)
+           J1Z  NOVAR
+           LDA  0,1(3:3)
+           JANZ NOVAR
+           JMP  XMIX
+           NOP  0,2  FR
+           JMP  INSUB,4  CP JMP INSUB
+           STA  0,3     CI STZ(0)
+           NOP  NEXT,6   XT
+OUT        JMP  XMIX
+           LDA  0,5    LD(0)
+           JMP  OUTSUB,4    CP JMP OUTSUB
+           NOP  NEXT,6   XT
+ARRAY      DEC3 2
+           J3Z  *+4
+1H         ENTA 6
+           STZ  LPRENR(2:2)
+           JMP  ERROR
+           LDX  RAND+2(3:3)
+           JXZ  1B
+           LD1  RAND+1(1:2)
+           LDX  0,1(1:2)
+           JXNZ 1B
+           LD3  RAND+2(1:2)
+           LDA  VAR
+           SUB  -2,3
+           DECA 1
+           STA  VAR
+           STA  0,1(1:2)
+           ENT3 0
+           ENTA 1
+           STA  -1,1(1:1)
+           LDA  OP
+           DECA 12
+           JAZ  1F
+           INC2 1
+           JMP  LEXSCAN
+1H         STZ  LPRENR(2:2)
+           JMP  NEXT
+*
+*     THE END OF COMPILATION
+*
+STOP       LD4  L
+           ENTA 8
+           J4P  ERROR1
+           DEC4 2
+           J4P  *-3
+           LDA  HLT(4:5)
+           JMP  COMPL1
+           STZ  FMTSW
+           ENT2 CROOT
+           ENT4 0,2
+3H         LD2  1,4(4:5)
+           J2NZ *-2
+4H         LDA  2,4(0:2)
+           JAN  1F
+           INCA 1
+           ADD  PROG
+           JMP  FIXUP
+           LDA  0,4
+           JMP  COMPL1
+1H         LDA  1,4(0:2)
+           JAN  1F
+           LDA  1,4(3:3)
+           DECA 3
+           JANZ 1F
+           LDA  0,4
+           CHAR
+           LD2  PBUF
+           STX  3,2
+           ENTA 7
+           JMP  ERROR1
+1H         CMP4 2,4(4:5)
+           LD4  2,4(4:5)
+           JL   3B
+           J4P  4B
+           LDA  PROG(1:2)
+           CMPA VAR
+           ENTA 13
+           JG   ERROR1
+           LDA  2F
+           STZ  SWITCH
+           JMP  FIXUP
+           LD2  PBUF
+           LDA  ERRCOUNT
+           CHAR
+           STX  0,2
+           ENT1 23
+           LDA  1F
+           STA  1,2
+           INC2 1
+           DEC1 1
+           J1P  *-3
+           JMP  PRINTOUT
+           OUT  TBUF(TAPE)
+           IOC  0(TAPE)
+           IOC  0(PRINTER)
+HLT        HLT  2
+           ENT6 3500
+           IN   0,6(TAPE)
+           IN   40,6(TAPE)
+           JMP  0,6
+1H         ALF  .....
+2H         CON  1(1:1),INIT0(2:3)
+*
+*         SYNTAX TABLES
+*
+LROOT      CON  100
+           CON  0
+           CON  0
+ROOT       ALF  IF
+           ALF
+           CON  *+4,*+1(2:3),3(1:1)
+           ALF  FOR
+           ALF
+           CON  *+7,*+4(2:3),4(1:1)
+           ALF  OUTPU
+           ALF  T
+           CON  *+10,*+7(2:3),5(1:1)
+           ALF  COMME
+           ALF  NT
+           CON  *+13,*+10(2:3),15(1:1)
+           ALF  GO
+           ALF
+           CON  7(1:1)
+           ALF  LOOP
+           ALF
+           CON  *+10(2:3),10(1:1)
+           ALF  THEN
+           ALF
+           CON  *+13,*+10(2:3),13(1:1)
+           ALF  ARRAY
+           ALF
+           CON  9(1:1)
+           ALF  END
+           ALF
+           CON  8(1:1)
+           ALF  INPUT
+           ALF
+           CON  6(1:1)
+           ALF  STOP
+           ALF
+           CON  14(1:1)
+           ALF  TO
+           ALF
+           CON  10(1:1)
+*
+           CON  FOR1,1(1:1)
+           CON  LPREN
+           CON  0
+           CON  ADD,3(1:1)
+           CON  SUB,3(1:1)
+           CON  MUL,5(1:1)
+           CON  DIV,5(1:1)
+           CON  -REPL,1(3:3)
+           CON  0
+           CON  LSS,1(1:1)
+           CON  GTR,1(1:1)
+STACKT     CON  0
+           CON  SUBSC,6(1:1)
+           CON  EQL,1(1:1)
+           CON  IF2
+           CON  FOR0,1(3:3)
+           CON  OUT
+           CON  IN
+           CON  GO
+           CON  END
+           CON  ARRAY
+           CON  COMPARE1
+           CON  NEG,5(1:1)
+LDELIM     CON  LD,1(2:2),1(3:3)
+*
+           CON  -BADCHAR
+           CON  COMPARE,1(2:2)
+LPRENR     CON  STACK
+           CON  COMPARE,1(2:2),1(3:3)
+           CON  -UNITARY,2(1:1)
+           CON  -UNITARY,2(1:1)
+           CON  COMPARE,4(1:1),1(2:2)
+           CON  COMPARE,4(1:1),1(2:2)
+           CON  EQUAL,2(1:1),1(2:2)
+           CON  -CARDEND,1(2:2)
+           CON  COMPARE,2(1:1),1(2:2)
+           CON  COMPARE,2(1:1),1(2:2)
+CONTROL    CON  LEXSCAN,1(3:3)
+           CON  STACK
+           CON  COMPARE,2(1:1)
+           CON  IF1
+           CON  STACK
+           CON  STACK
+           CON  STACK
+           CON  STACK
+           CON  STACK
+           CON  ARRAY1
+           CON  LEXSCAN
+           CON  STACK
+           CON  COMPARE,1(2:2)
+           CON  COMPARE,1(2:2)
+           CON  STOP
+           CON  NEXT
+*
+*    VARIABLES AND INTERNAL TABLE AREA
+*
+COMT       ALF
+COMT1      ALF
+OP         CON  0
+S          CON  0
+L          CON  0
+TEMP       CON  0
+LHS        CON  0
+VAR        CON  4000   ALLOCATION OF OBJECT VARIABLES
+PROG       CON  OBJECT(1:2)
+V          CON  0
+RX         CON  0
+REG        CON  0
+XMIXI      CON  0
+XMIXP      CON  0
+ERRCOUNT   CON  0
+BASEINDEX  CON  0
+BASELOC    CON  0
+MAXLOC     CON  0
+TEMP5      CON  0
+TEMP6      CON  0
+INST       CON  0
+Y          CON  *+10 BASE OF SYMBOL TABLES
+           END  BEGIN   AT MOST 10 LITERALS SHOULD APPEAR
+

@@ -1,0 +1,32 @@
+           COMMENT  THREETRAN TEST PROGRAM
+           ARRAY A(40),                                                    B(20)
+           ARRAY C(10)
+       000 INPUT N
+           FOR I=0000000001,N=2
+         1 FOR J=      1,1
+           GO
+          X          TO 8
+           END LOOP    J
+        2  FOR J=20,N*5
+           INPUT A(J++20)
+           INPUT B(--J)
+           INPUT C(A(J-B(J)))
+           IF -15 < A(2*J)
+          XTHEN
+          X    IF I=1 THEN
+          XA(-(J-20))=A(J)=B(J)=J=J*J+J/(J-21)/A(40)
+           OUTPUT A(0)+A(20)+A(40)+B(20)+C(10)
+           GO TO 9
+         8 GO TO 2
+         9 END LOOP
+          XI
+           IF N>0 THEN GO TO 0
+           STOP
+              4
+     0000000010
+             20-
+     1000000000
+             10
+             20-
+           2000-
+             50-
