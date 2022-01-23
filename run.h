@@ -25,4 +25,6 @@ Flag get_halting(void);                             /* HLT in progress */
 #define MIXCONFIG_MASTER    (128U)                  /* Mixmaster */
 void set_configuration(unsigned flags);             /* set MIX configuration */
 
+extern unsigned long elapsed_time;
+
 #endif

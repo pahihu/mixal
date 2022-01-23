@@ -12,6 +12,8 @@ If you want to run the real thing, you can try Michael Schroeder's [MIX-fpga](ht
 
 Changes:
 
+  * Tyme unit is 6us, drum size is 512 sectors, drum/disk rotational delay,
+    tape load-point
   * added unchecked transcripts of Knuth's MIX assembly program,
     Threetran interpreter and compiler
   * Mixmaster mode: memory size is 32KW, r1-r6 is 5 digits + sign,

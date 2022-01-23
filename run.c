@@ -49,7 +49,7 @@ static void stop(const char *message, va_list args)
 
 /* --- Execution statistics --- */
 
-static unsigned long elapsed_time = 0;      /* in Tyme units */
+unsigned long elapsed_time = 0;             /* in Tyme units (6us) */
 
 /* --- The CPU state --- */
 
@@ -61,7 +61,7 @@ unsigned *control_frequency;                /* control store frequency counts */
 unsigned trace_count = 0;                   /* do not trace instructions */
 unsigned mix_config = 0;                    /* MIX configuration */
 Cell INDEX_MAX;
-             /* max. index register value (2bytes standard, 5bytes Mixmaster) */
+             /* max. index register value (2bytes standard, 5digits Mixmaster)*/
 
 #define A 0
 #define X 7

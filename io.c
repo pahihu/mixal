@@ -40,9 +40,8 @@ static char* operations[] = {"control", "read", "write"};
 static struct {
     const enum DeviceType type;
     FILE *file;
-    long position;        /* used by random-access devices */
-  /*    const char *filename; */
-    unsigned busy;              /* expiration time */
+    long position;           /* used by random-access devices */
+    unsigned busy;           /* expiration time */
     Address pc;              /* I/O instruction address */
     Operation operation;     /* control, input, output */
     Cell rX;                 /* contents of r[X] */
@@ -50,6 +49,7 @@ static struct {
     Address buffer;          /* source/destination buffer address */
     Flag int_request;        /* request interrupt on completion */
     Flag int_pending;        /* interrupt pending */
+    Flag rewound;            /* tape rewound */
 } devices[] = {
     {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, {tape}, 
     {disk}, {disk}, {disk}, {disk}, {disk}, {disk}, {drum}, {drum}, 
@@ -91,18 +91,23 @@ static const struct Device_attributes {
  * ======================
  * drum B430
  *  3750rpm (?)
- *  2ms transfer time + 8ms avg. rotational delay
+ *  2ms transfer time + max. 16ms rotational delay
  *
  * disk B475
  *  1500rpm, head/track, 100Kcps
- *  5ms transfer time + 20ms avg. rotational delay
+ *  5ms transfer time + max. 40ms rotational delay
  *
- * tape B422
+ * tape B421
  *  90ips, 200/556cpi, 2400' reel, 18KC/50KC, 320ips high-speed rewind
+ *  417c gap - 8.3ms
  *  100W requires 500 BCD chars = 0.9" + 0.75" gap = 1.65" @ 556cpi
  *  10' load-point marker ... 14' end-of-reel marker => 28,512" usable
  *                                           17280 100W records
- *  4.5ms start time + 10ms transfer time + 4.2ms stop time
+ *  4.2ms start time + 10ms transfer time + 4.1ms stop time
+ *       4.2ms  700 Ty
+ *       4.1ms  683 Ty
+ *  assume
+ *      92.0ms  start time @ load-point    15333 Ty
  *
  * card_in B122
  *  200cpm, 80 column, 450 card hopper
@@ -117,15 +122,20 @@ static const struct Device_attributes {
  *  10cps
  *
  */
-{ "drum",   BIN_RWRITE,   64, 100, disk_in, disk_out, disk_ioc,   1000, 4000},
-{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,   2500,10000},
-{ "tape",   BIN_RWRITE,17280, 100, tape_in, tape_out, tape_ioc,   9850, 2578},
-{ "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,   150000,    0},
-{ "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,   300000,    0},
-{ "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,63158,2500},
-{ NULL,           NULL,    0,  14, console_in,console_out, no_ioc,3500000, 0}
+{ "drum",   BIN_RWRITE,  512, 100, disk_in, disk_out, disk_ioc,    333, 2667},
+{ "disk",   BIN_RWRITE, 4096, 100, disk_in, disk_out, disk_ioc,    833, 6667},
+{ "tape",   BIN_RWRITE,17280, 100, tape_in, tape_out, tape_ioc,   3050,  859},
+{ "reader", TXT_RDONLY,    0,  16, text_in,   no_out, no_ioc,    50000,    0},
+{ "punch",  TXT_APPEND,    0,  16, no_in,   text_out, no_ioc,   100000,    0},
+{ "printer",TXT_APPEND,    0,  24, no_in,   text_out, printer_ioc,21053, 833},
+{ NULL,           NULL,    0,  14, console_in,console_out, no_ioc,1166667, 0}
 
 };
+
+#define MT_START_LP     15333
+#define MT_START          700
+#define MT_TRANSFER      1667
+#define MT_STOP           683
 
 /* paper tape reader B141 1000/500cps, 10cpi */
 /* paper tape punch B341 100cps, 10cpi */
@@ -241,6 +251,7 @@ static void io_schedule(Address pc,
     unsigned busy, seek_time, io_time, u;
     enum DeviceType device_type;
     long position;
+    Flag rewound;
 
     if (dbg > 2) {
         fflush(stdout);
@@ -250,6 +261,8 @@ static void io_schedule(Address pc,
                 is_negative(rX) ? "-" : "", magnitude(rX),
                 offset, buffer);
     }
+
+    rewound = devices[device].rewound;
 
     devices[device].pc        = pc;
     devices[device].operation = operation;
@@ -264,46 +277,62 @@ static void io_schedule(Address pc,
 
     busy = 0;
     if (operation == control) {
-        unsigned dt = seek_time;
         switch (device_type) {
         case tape:
             u = magnitude(offset);
-            if (0 == u)                         /* --- rewind --- */
-                busy = position;
+            if (u == 0) {                       /* --- rewind --- */
+                devices[device].rewound = true;
+                busy = position * seek_time;
+            }
             else if (is_negative(offset)) {     /* --- skip backward --- */
                 busy = u < position ? u : position;
-                dt = io_time;
+                busy *= io_time;
             }
             else {                              /* --- skip forward --- */
                 busy = position + u;
                 if (busy >= attributes(device)->size)
                     busy = attributes(device)->size - position;
-                dt = io_time;
+                busy *= io_time;
+                if (busy != 0 && rewound == true) {
+                    busy += MT_START_LP - MT_START;
+                    devices[device].rewound = false;
+                }
             }
             break;
         case disk:
             // head/track
             busy = 0;
             // 1 head/surface
-            // busy = labs(position - offset) / 64;
+            // busy = labs(position - magnitude(offset)) / 64;
             break;
         case printer:
-            busy = 132 - (position % 132);
+            busy = (132 - (position % 132)) * seek_time;
             break;
         default:
             break;
         }
-        busy *= dt;
     }
     else {
-        if ((device_type != console) || (operation != input))
+        if ((device_type != console) || (operation != input)) {
             busy = io_time;
+            if (device_type == tape && rewound == true) {
+                busy += (MT_START_LP - MT_START);
+                devices[device].rewound = false;
+            }
+        }
     }
 
     if (operation == input || operation == output) {
-        /* average rotational delay */
-        if (device_type == disk || device_type == drum)
-            busy += seek_time;
+        /* rotational delay */
+        if (device_type == disk || device_type == drum) {
+            unsigned sector = 64 * (elapsed_time % seek_time) / (double)seek_time;
+            u = magnitude(offset) % 64;
+            if (u >= sector)
+                offset -= sector;
+            else
+                u += 64 - sector;
+            busy += seek_time * u / 64.0;
+        }
         io_mark_incomplete(buffer,
                            attributes(device)->block_size,
                            operation == input ? WRITE : READ);
@@ -654,20 +683,21 @@ static void disk_ioc(Byte device, Cell rX, Cell offset)
     if (magnitude(offset) != 0)
         error("IOC argument undefined for disk device %02o", device);
 
+    block_num = (unsigned) field(make_field_spec(4, 5), rX);
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), rX);
-    else
-        block_num = (unsigned) field(make_field_spec(4, 5), rX);
+        block_num &= 511;
+
     set_file_position(device, block_num, false);
 }
 
 static void disk_in(Byte device, Cell rX, Address buffer)
 {
     unsigned block_num;
+
+    block_num = (unsigned) field(make_field_spec(4, 5), rX);
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), rX);
-    else
-        block_num = (unsigned) field(make_field_spec(4, 5), rX);
+        block_num &= 511;
+
     set_file_position(device, block_num, false);
     read_block(device, buffer);
 }
@@ -675,10 +705,11 @@ static void disk_in(Byte device, Cell rX, Address buffer)
 static void disk_out(Byte device, Cell rX, Address buffer)
 {
     unsigned block_num;
+
+    block_num = (unsigned) field(make_field_spec(4, 5), rX);
     if (devices[device].type == drum)
-        block_num = (unsigned) field(make_field_spec(5, 5), rX);
-    else
-        block_num = (unsigned) field(make_field_spec(4, 5), rX);
+        block_num &= 511;
+
     set_file_position(device, block_num, true);
     write_block(device, buffer);
 }
@@ -773,6 +804,7 @@ void io_init(void)
         devices[i].busy = 0;
         devices[i].int_request = false;
         devices[i].int_pending = false;
+        devices[i].rewound = devices[i].type == tape ? true : false;
     }
     for (i = 0; i < memory_size; i++) {
         incomplete[i] = -WRITE;
