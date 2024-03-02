@@ -14,7 +14,7 @@ This implementation was designed and written by Darius Bacon
 <djello@well.sf.ca.us>, then ported to UNIX and debugged by Eric S. Raymond
 <esr@snark.thyrsus.com>.  Corrections to multiplication and division by
 Larry Gately <lgately@rohan.btg.com>; see Notes.  Tape devices and time
-dependent I/O by Andras Pahi <pahia@t-online.hu>; see Changes.
+dependent I/O by Andras Pahi <pahihu@gmail.com>; see Changes.
 
 		AUTHOR'S IMPLEMENTATION NOTES
 
