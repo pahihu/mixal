@@ -151,7 +151,7 @@ FP         STJ  EXITF             FRACTIONAL PART SUBROUTINE:
            ENT2 0
            JANN 1F
            ENN2 0,2               FRACTION IS NEGATIVE: FIND
-           STAX 0,2                 ITS COMPLEMENT.
+           SRAX 0,2                 ITS COMPLEMENT.
            ENT2 0
            JXNZ *+3
            JAZ  *+2
@@ -171,7 +171,7 @@ FCMP       STJ  9F                FLOATING POINT COMPARISON SUBROUTINE:
            DEC1 5
            J1N  *+2
            ENT1 0                 REPLACE LARGE DIFFERENCES IN EXPONENTS
-           STAX 5,1                   BY A SMALLER ONE.
+           SRAX 5,1                   BY A SMALLER ONE.
            ADD  FU                RA:=DIFFERENCE OF OPERANDS.
            JOV  7F                FRACTION OVERFLOW: NOT ~.
            CMPA EPSILON(1:5)
